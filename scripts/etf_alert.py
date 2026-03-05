@@ -49,20 +49,25 @@ def fetch_rss_headlines(name, url):
         return []
 
 
-def fetch_ticker_headline(ticker):
+def fetch_ticker_headlines(ticker, max_headlines=3):
+    """Fetch up to 3 recent Yahoo Finance news headlines for a ticker."""
     try:
         url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=8) as resp:
             xml_data = resp.read()
         root = ET.fromstring(xml_data)
+        headlines = []
         for item in root.findall(".//item"):
             title = item.findtext("title")
             if title and title.strip():
-                return title.strip()
+                headlines.append(title.strip())
+            if len(headlines) >= max_headlines:
+                break
+        return headlines
     except Exception as e:
         print(f"  No news for {ticker}: {e}")
-    return None
+    return []
 
 
 def html_escape(text):
@@ -174,8 +179,11 @@ def main():
             mg_str  = "  MG" if mg_bull > 0 else ""
 
             print(f"  Fetching news for {ticker}...")
-            headline = fetch_ticker_headline(ticker)
-            news_str = f"\n   &gt; <i>{html_escape(headline)}</i>" if headline else "\n   &gt; <i>No recent news found</i>"
+            headlines = fetch_ticker_headlines(ticker)
+            if headlines:
+                news_str = "\n" + "\n".join(f"   &gt; <i>{html_escape(h)}</i>" for h in headlines)
+            else:
+                news_str = "\n   &gt; <i>No recent news found</i>"
 
             lines.append(
                 f"** <b>{ticker}</b>  +{chg:.2f}%  |  #{rank}  {score:.0f}%{mg_str}\n"
