@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>US ETF Ranking — Indices · Sectors · Industries</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Barlow+Condensed:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #070a0d;
+  --bg2:       #0d1218;
+  --bg3:       #131a22;
+  --border:    #1c2830;
+  --border2:   #243040;
+  --text:      #c0d0e0;
+  --text-dim:  #4a6070;
+  --text-faint:#1e2e38;
+  --orange:    #ff8c00;
+  --orange-dim:#5a3000;
+  --green:     #00cc7a;
+  --green-dk:  #007a48;
+  --green-dim: #003d20;
+  --red:       #ff3344;
+  --red-dk:    #cc0011;
+  --red-dim:   #4a0010;
+  --amber:     #f0a000;
+  --blue:      #4499ff;
+  --mono: 'IBM Plex Mono', monospace;
+  --display: 'Barlow Condensed', sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body::before {
+  content:'';
+  position:fixed;
+  inset:0;
+  background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px);
+  pointer-events:none;
+  z-index:999;
+}
+
+.container { max-width: 1300px; margin: 0 auto; padding: 0 20px 60px; }
+
+/* ── Header ───────────────────────────────────────────── */
+header {
+  border-bottom: 1px solid var(--border);
+  padding: 28px 0 20px;
+  margin-bottom: 28px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 20px;
+}
+.site-label {
+  font-family: var(--display);
+  font-weight: 300;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.site-title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 32px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  line-height: 1;
+}
+.site-title span { color: var(--orange); }
+.updated-row {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.updated-row .dot { color: var(--orange); }
+
+/* ── Summary bar ─────────────────────────────────────── */
+.summary-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.stat-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+}
+.stat-label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.stat-value {
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.stat-sub { font-size: 10px; color: var(--text-dim); }
+.pos { color: var(--green); }
+.neg { color: var(--red); }
+.neu { color: var(--text-dim); }
+
+/* ── Tabs ────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border);
+}
+.tab-btn {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  padding: 10px 20px 9px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active {
+  color: var(--orange);
+  border-bottom-color: var(--orange);
+}
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* ── Table ────────────────────────────────────────────── */
+.tbl-header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 18px 0 10px;
+}
+.tbl-title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--orange);
+}
+.tbl-sub {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+}
+.tbl-wrap { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+thead th {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  text-align: left;
+}
+thead th.r { text-align: right; }
+thead th.c { text-align: center; }
+
+tbody tr {
+  border-bottom: 1px solid var(--text-faint);
+  transition: background 0.1s;
+}
+tbody tr:hover { background: var(--bg2); }
+tbody td {
+  padding: 9px 10px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+tbody td.r { text-align: right; }
+tbody td.c { text-align: center; }
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 20px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 13px;
+}
+.rank-top3  { color: var(--amber); }
+.rank-bottom3 { color: var(--text-dim); }
+.rank-mid   { color: var(--text); }
+
+.etf-name   { color: var(--text); font-size: 12px; }
+.etf-ticker { color: var(--text-dim); font-size: 10px; margin-top: 1px; }
+
+.price { color: var(--text); font-variant-numeric: tabular-nums; }
+
+.score-gt60 { color: var(--green-dk); }
+.score-50   { color: var(--green); }
+.score-lt50 { color: var(--red); }
+
+.score-cell { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.score-bar-bg  { width: 60px; height: 4px; background: var(--bg3); border-radius: 2px; }
+.score-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+
+.mg-badge {
+  font-family: var(--display);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 2px;
+  letter-spacing: 0.06em;
+}
+.mg-bull { background: var(--green-dim); color: var(--green); }
+.mg-bear { background: var(--red-dim);   color: var(--red); }
+.mg-neut { background: var(--bg3);       color: var(--text-dim); }
+
+.trend-up   { color: var(--green); font-size: 11px; }
+.trend-dn   { color: var(--red);   font-size: 11px; }
+.trend-flat { color: var(--text-dim); font-size: 11px; }
+
+.spark-wrap svg { display: block; width: 72px; height: 20px; }
+
+.error-box {
+  color: var(--amber);
+  background: var(--bg2);
+  border: 1px solid var(--orange-dim);
+  padding: 14px 18px;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.loading-row td { color: var(--text-dim); padding: 24px 10px; }
+
+/* ── Score threshold badge ────────────────────────────── */
+.threshold-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 7px;
+  background: var(--green-dim);
+  color: var(--green);
+  border-radius: 2px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* ── Legend ───────────────────────────────────────────── */
+.legend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 24px;
+}
+.legend-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  padding: 16px 18px;
+}
+.legend-title {
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin-bottom: 10px;
+}
+.legend-body {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.9;
+}
+
+/* ── Footer ───────────────────────────────────────────── */
+footer {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 0.06em;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── Fade in ──────────────────────────────────────────── */
+.fade-in { animation: fadeIn 0.4s ease both; }
+@keyframes fadeIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: none; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header class="fade-in">
+  <div>
+    <div class="site-label">Bull / Bear Event Model · WMA Composite</div>
+    <div class="site-title">US ETF <span>Ranking</span></div>
+    <div class="updated-row">
+      <span class="dot">◆</span>
+      <span id="updated-ts">Loading…</span>
+      <span>·</span>
+      <span>AUTO-REFRESH DAILY 22:00 UTC (9AM AEDT) VIA GITHUB ACTIONS</span>
+    </div>
+  </div>
+</header>
+
+<!-- Summary bar -->
+<div class="summary-bar fade-in" style="animation-delay:0.05s">
+  <div class="stat-box">
+    <div class="stat-label">Bullish ETFs</div>
+    <div class="stat-value pos" id="stat-bull">—</div>
+    <div class="stat-sub">Score ≥ 50%</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-label">Strong Bull (≥60%)</div>
+    <div class="stat-value" id="stat-strong" style="color:var(--green-dk)">—</div>
+    <div class="stat-sub">Alert threshold</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-label">Avg Composite Score</div>
+    <div class="stat-value" id="stat-avg">—</div>
+    <div class="stat-sub">All ETFs</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-label">Bearish ETFs</div>
+    <div class="stat-value neg" id="stat-bear">—</div>
+    <div class="stat-sub">Score &lt; 50%</div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs fade-in" style="animation-delay:0.08s">
+  <button class="tab-btn active" onclick="switchTab('Indices')">Indices</button>
+  <button class="tab-btn" onclick="switchTab('Sel Sectors')">Sel Sectors</button>
+  <button class="tab-btn" onclick="switchTab('Industries')">Industries</button>
+</div>
+
+<!-- Tab panes -->
+<div id="pane-Indices" class="tab-pane active fade-in" style="animation-delay:0.1s">
+  <div class="tbl-header">
+    <span class="tbl-title">Indices</span>
+    <span class="tbl-sub">Ranked by Composite Score · D×50% + W×30% + M×20%</span>
+    <span class="threshold-badge">ALERT ≥60%</span>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr>
+    <th>Rank</th><th>ETF</th><th class="r">Price</th><th class="r">Chg%</th>
+    <th class="r">Daily%</th><th class="r">Weekly%</th><th class="r">Monthly%</th>
+    <th class="r">Score</th><th class="c">MG</th><th class="c">Trend</th><th class="r">Spark</th>
+  </tr></thead><tbody id="body-Indices"><tr class="loading-row"><td colspan="11">Loading…</td></tr></tbody></table></div>
+</div>
+
+<div id="pane-Sel Sectors" class="tab-pane fade-in" style="animation-delay:0.1s">
+  <div class="tbl-header">
+    <span class="tbl-title">Sel Sectors</span>
+    <span class="tbl-sub">Ranked by Composite Score · D×50% + W×30% + M×20%</span>
+    <span class="threshold-badge">ALERT ≥60%</span>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr>
+    <th>Rank</th><th>ETF</th><th class="r">Price</th><th class="r">Chg%</th>
+    <th class="r">Daily%</th><th class="r">Weekly%</th><th class="r">Monthly%</th>
+    <th class="r">Score</th><th class="c">MG</th><th class="c">Trend</th><th class="r">Spark</th>
+  </tr></thead><tbody id="body-Sel Sectors"><tr class="loading-row"><td colspan="11">Loading…</td></tr></tbody></table></div>
+</div>
+
+<div id="pane-Industries" class="tab-pane fade-in" style="animation-delay:0.1s">
+  <div class="tbl-header">
+    <span class="tbl-title">Industries</span>
+    <span class="tbl-sub">Ranked by Composite Score · D×50% + W×30% + M×20%</span>
+    <span class="threshold-badge">ALERT ≥60%</span>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr>
+    <th>Rank</th><th>ETF</th><th class="r">Price</th><th class="r">Chg%</th>
+    <th class="r">Daily%</th><th class="r">Weekly%</th><th class="r">Monthly%</th>
+    <th class="r">Score</th><th class="c">MG</th><th class="c">Trend</th><th class="r">Spark</th>
+  </tr></thead><tbody id="body-Industries"><tr class="loading-row"><td colspan="11">Loading…</td></tr></tbody></table></div>
+</div>
+
+<!-- Legend -->
+<div class="legend-grid fade-in" style="animation-delay:0.15s">
+  <div class="legend-box">
+    <div class="legend-title">Column Guide</div>
+    <div class="legend-body">
+      <span style="color:var(--text)">Daily%</span> — WMA bull% on daily bars (30-bar lookback)<br>
+      <span style="color:var(--text)">Weekly%</span> — WMA bull% on weekly bars (13-bar lookback)<br>
+      <span style="color:var(--text)">Monthly%</span> — WMA bull% on monthly bars (12-bar lookback)<br>
+      <span style="color:var(--text)">Score</span> — Composite: D×50% + W×30% + M×20%<br>
+      <span style="color:var(--text)">MG</span> — Micro gap bias over last 13 weekly bars<br>
+      <span style="color:var(--text)">Trend</span> — Rank change vs 10 trading days ago
+    </div>
+  </div>
+  <div class="legend-box">
+    <div class="legend-title">Signal Colours</div>
+    <div class="legend-body">
+      <span style="color:var(--green-dk)">Dark Green</span> — Score &gt; 60% (strong bull · Telegram alert)<br>
+      <span style="color:var(--green)">Green</span> — Score ≥ 50% (bull)<br>
+      <span style="color:var(--red)">Red</span> — Score &lt; 50% (bear)<br>
+      <span style="color:var(--green-dk)">Chg Dark Green</span> — Day change &gt; +1%<br>
+      <span style="color:var(--red-dk)">Chg Dark Red</span> — Day change &lt; -1%<br>
+      <span style="color:var(--green)">MG B</span> — Micro gap bull dominant (2:1 ratio)
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>Data: Yahoo Finance · Bull/bear event model matches TradingView Pine Script v6 · Composite: D×50% + W×30% + M×20%</span>
+  <span id="footer-ts">—</span>
+</footer>
+
+</div>
+
+<script>
+const el = id => document.getElementById(id);
+
+const GROUPS = ['Indices', 'Sel Sectors', 'Industries'];
+let activeTab = 'Indices';
+
+function switchTab(name) {
+  activeTab = name;
+  GROUPS.forEach(g => {
+    el('pane-' + g).classList.toggle('active', g === name);
+    document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+      btn.classList.toggle('active', GROUPS[i] === name);
+    });
+  });
+}
+
+function fmtPrice(v) {
+  if (v == null) return '—';
+  if (v >= 10000) return v.toFixed(0);
+  if (v >= 1000)  return v.toFixed(1);
+  return v.toFixed(2);
+}
+
+function fmtPct(v, d=1) {
+  if (v == null) return '—';
+  return (v > 0 ? '+' : '') + v.toFixed(d) + '%';
+}
+
+function scoreClass(v) {
+  if (v == null) return 'neu';
+  if (v > 60)  return 'score-gt60';
+  if (v >= 50) return 'score-50';
+  return 'score-lt50';
+}
+
+function chgClass(v) {
+  if (v == null) return 'neu';
+  if (v > 1)   return 'pos';
+  if (v >= 0)  return 'pos';
+  if (v < -1)  return 'neg';
+  return 'neg';
+}
+
+function sparkSVG(data, bullish) {
+  if (!data || data.length < 2) return '—';
+  const W = 72, H = 20, pad = 1;
+  const lo = Math.min(...data), hi = Math.max(...data);
+  const rng = hi - lo || 1;
+  const pts = data.map((v, i) => {
+    const x = pad + (i / (data.length-1)) * (W - pad*2);
+    const y = H - pad - ((v-lo)/rng) * (H - pad*2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const col = bullish ? '#00cc7a' : '#ff3344';
+  const lx = (pad + (W - pad*2)).toFixed(1);
+  const areaPts = `${pad},${H-pad} ${pts} ${lx},${H-pad}`;
+  return `<svg viewBox="0 0 ${W} ${H}">
+    <polygon points="${areaPts}" fill="${col}" opacity="0.08"/>
+    <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+function rankBadgeClass(rank, total) {
+  if (rank <= 3) return 'rank-top3';
+  if (rank >= total - 2) return 'rank-bottom3';
+  return 'rank-mid';
+}
+
+function mgBadge(bull, bear) {
+  const total = bull + bear;
+  if (total === 0) return `<span class="mg-badge mg-neut">0/0</span>`;
+  if (bull >= 2 * bear) return `<span class="mg-badge mg-bull">B ${bull}/${total}</span>`;
+  if (bear > bull)      return `<span class="mg-badge mg-bear">B ${bull}/${total}</span>`;
+  return `<span class="mg-badge mg-neut">${bull}/${total}</span>`;
+}
+
+function trendIcon(d) {
+  if (d < 0) return `<span class="trend-up">▲${Math.abs(d)}</span>`;
+  if (d > 0) return `<span class="trend-dn">▼${d}</span>`;
+  return `<span class="trend-flat">─</span>`;
+}
+
+function scoreBarHTML(score) {
+  if (score == null) return '—';
+  const col = score > 60 ? '#007a48' : score >= 50 ? '#00cc7a' : '#ff3344';
+  return `<div class="score-cell">
+    <span class="${scoreClass(score)}">${score.toFixed(1)}%</span>
+    <div class="score-bar-bg"><div class="score-bar-fill" style="width:${Math.min(score,100)}%;background:${col}"></div></div>
+  </div>`;
+}
+
+function renderGroup(groupName, rows) {
+  const tbody = el('body-' + groupName);
+  if (!rows || rows.length === 0) {
+    tbody.innerHTML = `<tr class="loading-row"><td colspan="11">No data for ${groupName}</td></tr>`;
+    return;
+  }
+  const total = rows.length;
+  tbody.innerHTML = rows.map(r => {
+    const bullish = (r.composite || 0) >= 50;
+    return `<tr>
+      <td><span class="rank-badge ${rankBadgeClass(r.rank, total)}">${r.rank}</span></td>
+      <td>
+        <div class="etf-name">${r.name}</div>
+        <div class="etf-ticker">${r.ticker}</div>
+      </td>
+      <td class="r price">${fmtPrice(r.price)}</td>
+      <td class="r ${chgClass(r.chg)}">${fmtPct(r.chg, 2)}</td>
+      <td class="r ${scoreClass(r.daily)}">${fmtPct(r.daily, 1)}</td>
+      <td class="r ${scoreClass(r.weekly)}">${fmtPct(r.weekly, 1)}</td>
+      <td class="r ${scoreClass(r.monthly)}">${fmtPct(r.monthly, 1)}</td>
+      <td class="r">${scoreBarHTML(r.composite)}</td>
+      <td class="c">${mgBadge(r.mg_bull || 0, r.mg_bear || 0)}</td>
+      <td class="c">${trendIcon(r.rank_diff || 0)}</td>
+      <td class="r spark-wrap">${sparkSVG(r.spark, bullish)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderSummary(data) {
+  let totalBull = 0, totalStrong = 0, totalBear = 0, totalAll = 0, sumScore = 0;
+  GROUPS.forEach(g => {
+    const rows = data.groups[g] || [];
+    rows.forEach(r => {
+      const s = r.composite || 50;
+      totalAll++;
+      sumScore += s;
+      if (s >= 50) totalBull++;
+      if (s > 60)  totalStrong++;
+      else totalBear++;
+    });
+  });
+  el('stat-bull').textContent   = totalBull;
+  el('stat-strong').textContent = totalStrong;
+  el('stat-bear').textContent   = totalAll - totalBull;
+  const avg = totalAll > 0 ? sumScore / totalAll : 50;
+  const avgEl = el('stat-avg');
+  avgEl.textContent = avg.toFixed(1) + '%';
+  avgEl.className = 'stat-value ' + (avg >= 50 ? 'pos' : 'neg');
+}
+
+async function load() {
+  try {
+    const res = await fetch('data/etf_ranking.json?' + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const ts = new Date(data.updated);
+    el('updated-ts').textContent = ts.toLocaleString('en-AU', {
+      timeZone: 'Australia/Melbourne',
+      day:'2-digit', month:'short', year:'numeric',
+      hour:'2-digit', minute:'2-digit', timeZoneName:'short'
+    });
+    el('footer-ts').textContent = 'Last updated: ' + ts.toISOString();
+
+    renderSummary(data);
+    GROUPS.forEach(g => renderGroup(g, data.groups[g] || []));
+
+  } catch(err) {
+    const isNotFound = err.message.includes('404') || err.message.includes('HTTP 4');
+    const msg = isNotFound
+      ? `<code>data/etf_ranking.json</code> not yet generated. Go to <b>Actions → Refresh ETF Ranking Data → Run workflow</b> to generate it.`
+      : `Error loading data: ${err.message}`;
+    GROUPS.forEach(g => {
+      el('body-' + g).innerHTML = `<tr><td colspan="11" style="padding:24px"><div class="error-box">${msg}</div></td></tr>`;
+    });
+  }
+}
+
+load();
+</script>
+</body>
+</html>
