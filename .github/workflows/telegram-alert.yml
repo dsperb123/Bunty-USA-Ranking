@@ -1,0 +1,21 @@
+name: Daily ETF Ranking Alert
+
+on:
+  schedule:
+    # 10pm UTC Mon-Fri = 9am AEDT (UTC+11) Tue-Sat
+    # Data refresh runs at same time so alert runs 5 min after
+    - cron: "5 22 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  send-alert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Send Telegram alert
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/etf_alert.py
