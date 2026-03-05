@@ -111,7 +111,7 @@ def main():
             ranking_lines.append(f"\n<b>── {group_name} ──</b>")
             for r in qualifying:
                 ticker = r.get("ticker", "?")
-                name   = r.get("name", ticker)
+                name   = r.get("name", ticker).replace("&", "&amp;")
                 score  = r["composite"]
                 rank   = r.get("rank", "?")
                 diff   = r.get("rank_diff", 0)
@@ -127,7 +127,7 @@ def main():
                     trend = "●"
 
                 chg_str = f"  {'+' if chg and chg > 0 else ''}{chg:.1f}%" if chg is not None else ""
-                mg_str  = "  🔵MG" if mg_bull > 0 else ""
+                mg_str  = "  MG" if mg_bull > 0 else ""
                 bar     = score_bar(score)
 
                 ranking_lines.append(
