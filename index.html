@@ -256,6 +256,17 @@ tbody td.c { text-align: center; }
 
 .spark-wrap svg { display: block; width: 72px; height: 20px; }
 
+/* ── Sortable columns ─────────────────────────────────── */
+thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: color 0.15s;
+}
+thead th.sortable:hover { color: var(--orange); }
+thead th.sort-asc::after  { content: ' ▲'; color: var(--orange); font-size: 9px; }
+thead th.sort-desc::after { content: ' ▼'; color: var(--orange); font-size: 9px; }
+
 .error-box {
   color: var(--amber);
   background: var(--bg2);
@@ -379,9 +390,15 @@ footer {
     <span class="threshold-badge">ALERT ≥60%</span>
   </div>
   <div class="tbl-wrap"><table><thead><tr>
-    <th>Rank</th><th>ETF</th><th class="r">Price</th><th class="r">Chg%</th>
-    <th class="r">Daily%</th><th class="r">Weekly%</th><th class="r">Monthly%</th>
-    <th class="r">Score</th><th class="c">MG</th><th class="c">Trend</th><th class="r">Spark</th>
+    <th class="sortable" onclick="sortTable('Indices','rank')">Rank</th><th>ETF</th>
+    <th class="r sortable" onclick="sortTable('Indices','price')">Price</th>
+    <th class="r sortable" onclick="sortTable('Indices','chg')">Chg%</th>
+    <th class="r sortable" onclick="sortTable('Indices','daily')">Daily%</th>
+    <th class="r sortable" onclick="sortTable('Indices','weekly')">Weekly%</th>
+    <th class="r sortable" onclick="sortTable('Indices','monthly')">Monthly%</th>
+    <th class="r sortable" onclick="sortTable('Indices','composite')">Score</th>
+    <th class="c">MG</th><th class="c sortable" onclick="sortTable('Indices','rank_diff')">Trend</th>
+    <th class="r sortable" onclick="sortTable('Indices','spark')">Spark</th>
   </tr></thead><tbody id="body-Indices"><tr class="loading-row"><td colspan="11">Loading…</td></tr></tbody></table></div>
 </div>
 
@@ -392,9 +409,15 @@ footer {
     <span class="threshold-badge">ALERT ≥60%</span>
   </div>
   <div class="tbl-wrap"><table><thead><tr>
-    <th>Rank</th><th>ETF</th><th class="r">Price</th><th class="r">Chg%</th>
-    <th class="r">Daily%</th><th class="r">Weekly%</th><th class="r">Monthly%</th>
-    <th class="r">Score</th><th class="c">MG</th><th class="c">Trend</th><th class="r">Spark</th>
+    <th class="sortable" onclick="sortTable('Sel Sectors','rank')">Rank</th><th>ETF</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','price')">Price</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','chg')">Chg%</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','daily')">Daily%</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','weekly')">Weekly%</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','monthly')">Monthly%</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','composite')">Score</th>
+    <th class="c">MG</th><th class="c sortable" onclick="sortTable('Sel Sectors','rank_diff')">Trend</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','spark')">Spark</th>
   </tr></thead><tbody id="body-Sel Sectors"><tr class="loading-row"><td colspan="11">Loading…</td></tr></tbody></table></div>
 </div>
 
@@ -405,9 +428,15 @@ footer {
     <span class="threshold-badge">ALERT ≥60%</span>
   </div>
   <div class="tbl-wrap"><table><thead><tr>
-    <th>Rank</th><th>ETF</th><th class="r">Price</th><th class="r">Chg%</th>
-    <th class="r">Daily%</th><th class="r">Weekly%</th><th class="r">Monthly%</th>
-    <th class="r">Score</th><th class="c">MG</th><th class="c">Trend</th><th class="r">Spark</th>
+    <th class="sortable" onclick="sortTable('Industries','rank')">Rank</th><th>ETF</th>
+    <th class="r sortable" onclick="sortTable('Industries','price')">Price</th>
+    <th class="r sortable" onclick="sortTable('Industries','chg')">Chg%</th>
+    <th class="r sortable" onclick="sortTable('Industries','daily')">Daily%</th>
+    <th class="r sortable" onclick="sortTable('Industries','weekly')">Weekly%</th>
+    <th class="r sortable" onclick="sortTable('Industries','monthly')">Monthly%</th>
+    <th class="r sortable" onclick="sortTable('Industries','composite')">Score</th>
+    <th class="c">MG</th><th class="c sortable" onclick="sortTable('Industries','rank_diff')">Trend</th>
+    <th class="r sortable" onclick="sortTable('Industries','spark')">Spark</th>
   </tr></thead><tbody id="body-Industries"><tr class="loading-row"><td colspan="11">Loading…</td></tr></tbody></table></div>
 </div>
 
@@ -449,6 +478,45 @@ const el = id => document.getElementById(id);
 
 const GROUPS = ['Indices', 'Sel Sectors', 'Industries'];
 let activeTab = 'Indices';
+
+// Sort state per group: { col, dir }  dir = 'desc' | 'asc'
+const sortState = {};
+GROUPS.forEach(g => sortState[g] = { col: 'rank', dir: 'asc' });
+
+// Raw data store per group
+const groupData = {};
+
+function sortTable(group, col) {
+  const state = sortState[group];
+  if (state.col === col) {
+    state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.col = col;
+    state.dir = col === 'rank' ? 'asc' : 'desc';
+  }
+  const rows = [...(groupData[group] || [])];
+  rows.sort((a, b) => {
+    let av, bv;
+    if (col === 'spark') {
+      av = a.spark ? a.spark[a.spark.length - 1] : 0;
+      bv = b.spark ? b.spark[b.spark.length - 1] : 0;
+    } else {
+      av = a[col] ?? (col === 'rank' ? 999 : -999);
+      bv = b[col] ?? (col === 'rank' ? 999 : -999);
+    }
+    return state.dir === 'asc' ? av - bv : bv - av;
+  });
+  renderGroup(group, rows, true);
+  // Update header arrow indicators
+  const pane = el('pane-' + group);
+  pane.querySelectorAll('th.sortable').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    const onclick = th.getAttribute('onclick') || '';
+    if (onclick.includes(`'${col}'`)) {
+      th.classList.add(state.dir === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
+  });
+}
 
 function switchTab(name) {
   activeTab = name;
@@ -535,13 +603,14 @@ function scoreBarHTML(score) {
   </div>`;
 }
 
-function renderGroup(groupName, rows) {
+function renderGroup(groupName, rows, skipStore) {
+  if (!skipStore) groupData[groupName] = rows;
   const tbody = el('body-' + groupName);
   if (!rows || rows.length === 0) {
     tbody.innerHTML = `<tr class="loading-row"><td colspan="11">No data for ${groupName}</td></tr>`;
     return;
   }
-  const total = rows.length;
+  const total = (groupData[groupName] || rows).length;
   tbody.innerHTML = rows.map(r => {
     const bullish = (r.composite || 0) >= 50;
     return `<tr>
