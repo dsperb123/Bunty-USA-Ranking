@@ -3,8 +3,7 @@
 Daily ETF Ranking Alert
 - MarketWatch + Seeking Alpha market headlines
 - Indices & Sel Sectors: tickers with composite score >= 60%
-- Industries: top 15 ranked tickers moving >+1% on the day,
-  with a Yahoo Finance news headline per ticker to explain the move
+- Industries: top 15 ranked tickers moving >+1%, with 3 news headlines each
 No external dependencies required.
 """
 
@@ -49,8 +48,7 @@ def fetch_rss_headlines(name, url):
         return []
 
 
-def fetch_ticker_headlines(ticker, max_headlines=3):
-    """Fetch up to 3 recent Yahoo Finance news headlines for a ticker."""
+def fetch_ticker_headlines(ticker, count=3):
     try:
         url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -62,7 +60,7 @@ def fetch_ticker_headlines(ticker, max_headlines=3):
             title = item.findtext("title")
             if title and title.strip():
                 headlines.append(title.strip())
-            if len(headlines) >= max_headlines:
+            if len(headlines) >= count:
                 break
         return headlines
     except Exception as e:
@@ -71,27 +69,30 @@ def fetch_ticker_headlines(ticker, max_headlines=3):
 
 
 def html_escape(text):
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return (text
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;"))
 
 
-def send_telegram(message):
+def post_message(text):
+    """Send a single message to Telegram (max 4096 chars)."""
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        print("ERROR: TELEGRAM_TOKEN or TELEGRAM_CHAT_ID not set.", file=sys.stderr)
+        print("ERROR: secrets not set.", file=sys.stderr)
         sys.exit(1)
-    chunks = [message[i:i+4000] for i in range(0, len(message), 4000)]
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    for chunk in chunks:
-        data = urllib.parse.urlencode({
-            "chat_id":    TELEGRAM_CHAT_ID,
-            "text":       chunk,
-            "parse_mode": "HTML",
-        }).encode()
-        req = urllib.request.Request(url, data=data, method="POST")
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            result = json.loads(resp.read())
-            if not result.get("ok"):
-                print(f"Telegram error: {result}", file=sys.stderr)
-                sys.exit(1)
+    url  = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    data = urllib.parse.urlencode({
+        "chat_id":    TELEGRAM_CHAT_ID,
+        "text":       text[:4090],
+        "parse_mode": "HTML",
+    }).encode()
+    req = urllib.request.Request(url, data=data, method="POST")
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        result = json.loads(resp.read())
+        if not result.get("ok"):
+            print(f"Telegram error: {result}", file=sys.stderr)
+            sys.exit(1)
 
 
 def score_bar(score):
@@ -110,9 +111,9 @@ def main():
     now_str = datetime.now(timezone.utc).strftime("%d %b %Y")
     all_groups = data.get("groups", {})
 
+    # ── Message 1: Headlines + Indices/Sel Sectors ────────
     lines = [f"<b>[ US ETF Morning Brief -- {now_str} ]</b>"]
 
-    # -- Market Headlines
     for feed_name, feed_url in RSS_FEEDS:
         headlines = fetch_rss_headlines(feed_name, feed_url)
         if headlines:
@@ -120,16 +121,13 @@ def main():
             for h in headlines:
                 lines.append(f"- {html_escape(h)}")
 
-    # -- Indices & Sel Sectors: score >= 60%
     total_score = 0
     score_lines = []
-
     for group_name in ALERT_GROUPS:
         rows = all_groups.get(group_name, [])
         qualifying = [r for r in rows
                       if r.get("composite") is not None and r["composite"] >= SCORE_THRESHOLD]
         qualifying.sort(key=lambda r: r["composite"], reverse=True)
-
         if qualifying:
             score_lines.append(f"\n<b>-- {group_name} --</b>")
             for r in qualifying:
@@ -151,50 +149,60 @@ def main():
 
     lines.append(f"\n<b>-- ETF Rankings &gt;={SCORE_THRESHOLD:.0f}% --</b>")
     if total_score == 0:
-        lines.append("No Indices or Sel Sectors tickers scored above 60% today.")
+        lines.append("No Indices or Sel Sectors above 60% today.")
     else:
         lines.extend(score_lines)
         lines.append(f"\n<i>{total_score} ticker(s) above {SCORE_THRESHOLD:.0f}%</i>")
 
-    # -- Industries: top 15 ranked + moving >1% + news
+    post_message("\n".join(lines))
+    print("Message 1 sent.")
+
+    # ── Message 2: Industries movers header ───────────────
     industry_rows = all_groups.get("Industries", [])
     top15 = sorted(industry_rows, key=lambda r: r.get("rank", 999))[:INDUSTRY_TOP_N]
     movers = [r for r in top15
               if r.get("chg") is not None and r["chg"] >= INDUSTRY_MOVE_MIN]
     movers.sort(key=lambda r: r["chg"], reverse=True)
 
-    lines.append(f"\n<b>-- Industries: Top {INDUSTRY_TOP_N} / Movers &gt;+{INDUSTRY_MOVE_MIN:.0f}% --</b>")
+    header = (
+        f"<b>-- Industries: Top {INDUSTRY_TOP_N} / Movers &gt;+{INDUSTRY_MOVE_MIN:.0f}% --</b>\n"
+        f"<i>{len(movers)} mover(s) found -- details below</i>"
+    ) if movers else (
+        f"<b>-- Industries: Top {INDUSTRY_TOP_N} --</b>\n"
+        f"<i>No tickers in top {INDUSTRY_TOP_N} moved more than +{INDUSTRY_MOVE_MIN:.0f}% today.</i>"
+    )
+    post_message(header)
+    print("Message 2 sent.")
 
-    if not movers:
-        lines.append(f"No top-{INDUSTRY_TOP_N} Industries tickers moved more than +{INDUSTRY_MOVE_MIN:.0f}% today.")
-    else:
-        lines.append("<i>Rank / Score / Move / News</i>\n")
-        for r in movers:
-            ticker  = r.get("ticker", "?")
-            name    = html_escape(r.get("name", ticker))
-            score   = r.get("composite", 0)
-            rank    = r.get("rank", "?")
-            chg     = r["chg"]
-            mg_bull = r.get("mg_bull", 0)
-            mg_str  = "  MG" if mg_bull > 0 else ""
+    # ── One message per mover with 3 headlines ─────────────
+    for r in movers:
+        ticker  = r.get("ticker", "?")
+        name    = html_escape(r.get("name", ticker))
+        score   = r.get("composite", 0)
+        rank    = r.get("rank", "?")
+        chg     = r["chg"]
+        mg_bull = r.get("mg_bull", 0)
+        mg_str  = "  MG" if mg_bull > 0 else ""
 
-            print(f"  Fetching news for {ticker}...")
-            headlines = fetch_ticker_headlines(ticker)
-            if headlines:
-                news_str = "\n" + "\n".join(f"   &gt; <i>{html_escape(h)}</i>" for h in headlines)
-            else:
-                news_str = "\n   &gt; <i>No recent news found</i>"
+        print(f"  Fetching news for {ticker}...")
+        headlines = fetch_ticker_headlines(ticker, count=3)
 
-            lines.append(
-                f"** <b>{ticker}</b>  +{chg:.2f}%  |  #{rank}  {score:.0f}%{mg_str}\n"
-                f"   {name}{news_str}\n"
-            )
-        lines.append(f"<i>{len(movers)} mover(s) in top {INDUSTRY_TOP_N}</i>")
+        msg_lines = [
+            f"<b>{ticker}</b>  +{chg:.2f}%  |  Rank #{rank}  Score {score:.0f}%{mg_str}",
+            f"<i>{name}</i>",
+            "",
+        ]
+        if headlines:
+            msg_lines.append("<b>News:</b>")
+            for i, h in enumerate(headlines, 1):
+                msg_lines.append(f"{i}. {html_escape(h)}")
+        else:
+            msg_lines.append("<i>No recent news found</i>")
 
-    message = "\n".join(lines)
-    print(message)
-    send_telegram(message)
-    print("Alert sent.")
+        post_message("\n".join(msg_lines))
+        print(f"  Sent {ticker}")
+
+    print("All alerts sent.")
 
 
 if __name__ == "__main__":
