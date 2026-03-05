@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 TELEGRAM_TOKEN      = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID    = os.environ.get("TELEGRAM_CHAT_ID")
 SCORE_THRESHOLD     = 60.0
-INDUSTRY_TOP_N      = 15
+INDUSTRY_TOP_N      = 20
 INDUSTRY_MOVE_MIN   = 1.0
 ALERT_GROUPS        = ["Indices", "Sel Sectors"]
 MAX_HEADLINES       = 4
