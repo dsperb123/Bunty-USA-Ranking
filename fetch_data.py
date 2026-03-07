@@ -1,423 +1,797 @@
-#!/usr/bin/env python3
-"""
-US ETF Ranking — data fetcher
-Uses same bull/bear event detection, WMA weighting and composite scoring
-as the ASX Sector Strength script.
-Outputs: data/etf_ranking.json
-"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>US ETF Ranking — Indices · Sectors · Industries</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Barlow+Condensed:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-import json
-import os
-import sys
-from datetime import datetime, timezone
-
-import numpy as np
-import pandas as pd
-import yfinance as yf
-
-# ── Tickers ───────────────────────────────────────────────────────────────────
-GROUPS = {
-    "Indices": {
-        "SPY":  "SPDR S&P 500 ETF",
-        "QQQ":  "Invesco Nasdaq-100 ETF",
-        "DIA":  "SPDR Dow Jones ETF",
-        "IWM":  "iShares Russell 2000 ETF",
-        "MDY":  "SPDR S&P MidCap 400 ETF",
-        "RSP":  "Invesco S&P 500 EW ETF",
-        "MGK":  "Vanguard Mega Cap Growth ETF",
-        "QQQE": "Direxion Nasdaq-100 EW ETF",
-        "TLT":  "iShares 20+ Year Treasury ETF",
-        "IBIT": "iShares Bitcoin Trust",
-        "ETHA": "iShares Ethereum Trust",
-    },
-    "Sel Sectors": {
-        "XLK":  "SPDR Technology Select Sector ETF",
-        "XLC":  "SPDR Communication Services ETF",
-        "XLI":  "SPDR Industrials Select Sector ETF",
-        "XLF":  "SPDR Financials Select Sector ETF",
-        "XLY":  "SPDR Consumer Discretionary ETF",
-        "XLV":  "SPDR Health Care Select Sector ETF",
-        "XLE":  "SPDR Energy Select Sector ETF",
-        "XLB":  "SPDR Materials Select Sector ETF",
-        "XLP":  "SPDR Consumer Staples ETF",
-        "XLRE": "SPDR Real Estate Select Sector ETF",
-        "XLU":  "SPDR Utilities Select Sector ETF",
-    },
-    "Industries": {
-        "SOXX": "iShares Semiconductor ETF",
-        "SMH":  "VanEck Semiconductor ETF",
-        "IGV":  "iShares Software ETF",
-        "WCLD": "WisdomTree Cloud Computing ETF",
-        "CIBR": "First Trust Cybersecurity ETF",
-        "AIQ":  "Global X AI ETF",
-        "ARKK": "ARK Innovation ETF",
-        "ARKF": "ARK Fintech Innovation ETF",
-        "ARKX": "ARK Space Exploration ETF",
-        "ARKG": "ARK Genomic Revolution ETF",
-        "BOTZ": "Global X Robotics & AI ETF",
-        "ROBO": "Robo Global Robotics ETF",
-        "BLOK": "Amplify Blockchain ETF",
-        "FNGS": "MicroSectors FANG+ ETF",
-        "FDN":  "First Trust Internet ETF",
-        "SOCL": "Global X Social Media ETF",
-        "FFTY": "Innovator IBD 50 ETF",
-        "ITA":  "iShares Aerospace & Defense ETF",
-        "XAR":  "SPDR Aerospace & Defense ETF",
-        "PAVE": "Global X Infrastructure ETF",
-        "XTN":  "SPDR S&P Transportation ETF",
-        "JETS": "US Global Jets ETF",
-        "BOAT": "SonicShares Global Shipping ETF",
-        "KBE":  "SPDR S&P Bank ETF",
-        "KRE":  "SPDR S&P Regional Banking ETF",
-        "KIE":  "SPDR S&P Insurance ETF",
-        "KCE":  "SPDR S&P Capital Markets ETF",
-        "IPAY": "ETFMG Prime Mobile Payments ETF",
-        "IBB":  "iShares Biotech ETF",
-        "XBI":  "SPDR Biotech ETF",
-        "IHI":  "iShares Medical Devices ETF",
-        "XHE":  "SPDR S&P Health Care Equipment ETF",
-        "PPH":  "VanEck Pharmaceutical ETF",
-        "ICLN": "iShares Clean Energy ETF",
-        "TAN":  "Invesco Solar ETF",
-        "URA":  "Global X Uranium ETF",
-        "NLR":  "VanEck Uranium & Nuclear ETF",
-        "HYDR": "Global X Hydrogen ETF",
-        "XLE":  "SPDR Energy Select Sector ETF",
-        "XOP":  "SPDR Oil & Gas E&P ETF",
-        "OIH":  "VanEck Oil Services ETF",
-        "XES":  "SPDR Oil & Gas Equipment ETF",
-        "FCG":  "First Trust Natural Gas ETF",
-        "UNG":  "US Natural Gas Fund",
-        "USO":  "US Oil Fund",
-        "GLD":  "SPDR Gold Shares",
-        "GDX":  "VanEck Gold Miners ETF",
-        "SILJ": "ETFMG Junior Silver Miners ETF",
-        "SLV":  "iShares Silver Trust",
-        "WGMI": "Valkyrie Bitcoin Miners ETF",
-        "LIT":  "Global X Lithium & Battery ETF",
-        "REMX": "VanEck Rare Earth ETF",
-        "COPX": "Global X Copper Miners ETF",
-        "CPER": "US Copper Index Fund",
-        "SLX":  "VanEck Steel ETF",
-        "XME":  "SPDR S&P Metals & Mining ETF",
-        "DBC":  "Invesco DB Commodity Fund",
-        "DBA":  "Invesco DB Agriculture Fund",
-        "VNQ":  "Vanguard Real Estate ETF",
-        "SCHH": "Schwab US REIT ETF",
-        "REZ":  "iShares Residential Real Estate ETF",
-        "XHB":  "SPDR Homebuilders ETF",
-        "XRT":  "SPDR S&P Retail ETF",
-        "IBUY": "Amplify Online Retail ETF",
-        "PEJ":  "Invesco Leisure & Entertainment ETF",
-        "EATZ": "AdvisorShares Restaurant ETF",
-        "PBJ":  "Invesco Food & Beverage ETF",
-        "IYZ":  "iShares US Telecommunications ETF",
-        "XTL":  "SPDR Telecom ETF",
-        "DRIV": "Global X Autonomous & EV ETF",
-        "KWEB": "KraneShares China Internet ETF",
-        "GXC":  "SPDR S&P China ETF",
-        "MSOS": "AdvisorShares US Cannabis ETF",
-        "UTES": "Virtus Reaves Utilities ETF",
-    },
+:root {
+  --bg:        #070a0d;
+  --bg2:       #0d1218;
+  --bg3:       #131a22;
+  --border:    #1c2830;
+  --border2:   #243040;
+  --text:      #c0d0e0;
+  --text-dim:  #4a6070;
+  --text-faint:#1e2e38;
+  --orange:    #ff8c00;
+  --orange-dim:#5a3000;
+  --green:     #00cc7a;
+  --green-dk:  #007a48;
+  --green-dim: #003d20;
+  --red:       #ff3344;
+  --red-dk:    #cc0011;
+  --red-dim:   #4a0010;
+  --amber:     #f0a000;
+  --blue:      #4499ff;
+  --mono: 'IBM Plex Mono', monospace;
+  --display: 'Barlow Condensed', sans-serif;
 }
 
-# ── Config ────────────────────────────────────────────────────────────────────
-D_LOOKBACK   = 30
-W_LOOKBACK   = 13
-M_LOOKBACK   = 12
-CL_LEN       = 10
-CL_MULT      = 1.7
-DAILY_WT     = 0.50
-WEEKLY_WT    = 0.30
-MONTHLY_WT   = 0.20
-WICK_THRESH  = 1.0
-RANK_LBK     = 10
-MG_WEEKLY_LBK = 13
+html { scroll-behavior: smooth; }
 
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
 
-# ── WMA ───────────────────────────────────────────────────────────────────────
-def wma(series, period):
-    weights = np.arange(1, period + 1, dtype=float)
-    w_sum   = weights.sum()
-    out     = np.full(len(series), np.nan)
-    for i in range(period - 1, len(series)):
-        out[i] = np.dot(series[i - period + 1: i + 1], weights) / w_sum
-    return out
+body::before {
+  content:'';
+  position:fixed;
+  inset:0;
+  background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px);
+  pointer-events:none;
+  z-index:999;
+}
 
+.container { max-width: 1300px; margin: 0 auto; padding: 0 20px 60px; }
 
-# ── Bull events ───────────────────────────────────────────────────────────────
-def detect_bull_events(opens, highs, lows, closes):
-    n = len(closes)
-    events = np.zeros(n, dtype=float)
-    ranges = highs - lows
-    range_sma = pd.Series(ranges).rolling(CL_LEN).mean().shift(1).values
-    y_level, y_win = np.nan, 0
-    in_hi, in_win  = np.nan, 0
-    cl_mid, cl_win, cl_ok = np.nan, 0, True
-    tl_level, tl_win = np.nan, 0
+/* ── Header ───────────────────────────────────────────── */
+header {
+  border-bottom: 1px solid var(--border);
+  padding: 28px 0 20px;
+  margin-bottom: 28px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 20px;
+}
+.site-label {
+  font-family: var(--display);
+  font-weight: 300;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.site-title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 32px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  line-height: 1;
+}
+.site-title span { color: var(--orange); }
+.updated-row {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.updated-row .dot { color: var(--orange); }
 
-    for i in range(5, n):
-        bull = closes[i] > opens[i]
-        bull4 = all(closes[i-k] > opens[i-k] for k in range(4))
-        bull_ol = bull and opens[i] == lows[i]
-        is_outside = highs[i] > highs[i-1] and lows[i] < lows[i-1]
-        is_inside  = highs[i] < highs[i-1] and lows[i] > lows[i-1]
+/* ── Summary bar ─────────────────────────────────────── */
+.summary-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.stat-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+}
+.stat-label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.stat-value {
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.stat-sub { font-size: 10px; color: var(--text-dim); }
+.pos { color: var(--green); }
+.neg { color: var(--red); }
+.neu { color: var(--text-dim); }
 
-        bull_yellow = False
-        if is_outside and lows[i] < lows[i-1]:
-            y_level, y_win = highs[i], 3
-        elif y_win > 0:
-            bull_yellow = closes[i] > y_level
-            y_win -= 1
-            if bull_yellow or y_win == 0:
-                y_level, y_win = np.nan, 0
+/* ── Tabs ────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border);
+}
+.tab-btn {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  padding: 10px 20px 9px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active {
+  color: var(--orange);
+  border-bottom-color: var(--orange);
+}
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
 
-        bull_inside = False
-        if is_inside:
-            in_hi, in_win = highs[i], 3
-        elif in_win > 0:
-            bull_inside = closes[i] > in_hi
-            in_win -= 1
-            if bull_inside or in_win == 0:
-                in_hi, in_win = np.nan, 0
+/* ── Table ────────────────────────────────────────────── */
+.tbl-header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 18px 0 10px;
+}
+.tbl-title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--orange);
+}
+.tbl-sub {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+}
+.tbl-wrap { overflow-x: auto; }
 
-        bull_clim = False
-        r_sma = range_sma[i] if not np.isnan(range_sma[i]) else 0
-        if bull and ranges[i] >= r_sma * CL_MULT:
-            cl_mid, cl_win, cl_ok = lows[i] + ranges[i] * 0.5, 2, True
-        elif cl_win > 0:
-            cl_ok  = cl_ok and (lows[i] >= cl_mid)
-            cl_win -= 1
-            if cl_win == 0:
-                bull_clim = True
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+thead th {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  text-align: left;
+}
+thead th.r { text-align: right; }
+thead th.c { text-align: center; }
 
-        bull_tl = False
-        btl = lows[i-1] < lows[i-2] < lows[i-3] < lows[i-4]
-        if btl:
-            tl_level, tl_win = highs[i-1], 3
-        if tl_win > 0 and not btl:
-            bull_tl = highs[i] > tl_level
-            tl_win -= 1
-            if bull_tl or tl_win == 0:
-                tl_level, tl_win = np.nan, 0
+tbody tr {
+  border-bottom: 1px solid var(--text-faint);
+  transition: background 0.1s;
+}
+tbody tr:hover { background: var(--bg2); }
+tbody td {
+  padding: 9px 10px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+tbody td.r { text-align: right; }
+tbody td.c { text-align: center; }
 
-        tick_gap_dn = brk_gap_up = False
-        if i >= 1:
-            tick_gap_dn = opens[i] < closes[i-1] and bull and (opens[i] - lows[i]) < WICK_THRESH
-            brk_gap_up  = opens[i] > closes[i-1] and closes[i] > highs[i-1]
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 20px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 13px;
+}
+.rank-top3  { color: var(--amber); }
+.rank-bottom3 { color: var(--text-dim); }
+.rank-mid   { color: var(--text); }
 
-        events[i] = float(any([bull4, bull_ol, bull_yellow, bull_inside,
-                                bull_clim, bull_tl, tick_gap_dn, brk_gap_up]))
-    return events
+.etf-name   { color: var(--text); font-size: 12px; }
+.etf-ticker { color: var(--text-dim); font-size: 10px; margin-top: 1px; }
 
+.price { color: var(--text); font-variant-numeric: tabular-nums; }
 
-# ── Bear events ───────────────────────────────────────────────────────────────
-def detect_bear_events(opens, highs, lows, closes):
-    n = len(closes)
-    events = np.zeros(n, dtype=float)
-    ranges = highs - lows
-    range_sma = pd.Series(ranges).rolling(CL_LEN).mean().shift(1).values
-    y_level, y_win = np.nan, 0
-    in_lo, in_win  = np.nan, 0
-    cl_mid, cl_win, cl_ok = np.nan, 0, True
-    th_level, th_win = np.nan, 0
+.score-gt60 { color: var(--green-dk); }
+.score-50   { color: var(--green); }
+.score-lt50 { color: var(--red); }
 
-    for i in range(5, n):
-        bear = closes[i] < opens[i]
-        bear4 = all(closes[i-k] < opens[i-k] for k in range(4))
-        bear_oh = bear and opens[i] == highs[i]
-        is_outside = highs[i] > highs[i-1] and lows[i] < lows[i-1]
-        is_inside  = highs[i] < highs[i-1] and lows[i] > lows[i-1]
+.score-cell { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.score-bar-bg  { width: 60px; height: 4px; background: var(--bg3); border-radius: 2px; }
+.score-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
 
-        bear_yellow = False
-        if is_outside and highs[i] > highs[i-1]:
-            y_level, y_win = lows[i], 3
-        elif y_win > 0:
-            bear_yellow = closes[i] < y_level
-            y_win -= 1
-            if bear_yellow or y_win == 0:
-                y_level, y_win = np.nan, 0
+.mg-badge {
+  font-family: var(--display);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 2px;
+  letter-spacing: 0.06em;
+}
+.mg-bull { background: var(--green-dim); color: var(--green); }
+.mg-bear { background: var(--red-dim);   color: var(--red); }
+.mg-neut { background: var(--bg3);       color: var(--text-dim); }
 
-        bear_inside = False
-        if is_inside:
-            in_lo, in_win = lows[i], 3
-        elif in_win > 0:
-            bear_inside = closes[i] < in_lo
-            in_win -= 1
-            if bear_inside or in_win == 0:
-                in_lo, in_win = np.nan, 0
+.trend-up   { color: var(--green); font-size: 11px; }
+.trend-dn   { color: var(--red);   font-size: 11px; }
+.trend-flat { color: var(--text-dim); font-size: 11px; }
 
-        bear_clim = False
-        r_sma = range_sma[i] if not np.isnan(range_sma[i]) else 0
-        if bear and ranges[i] >= r_sma * CL_MULT:
-            cl_mid, cl_win, cl_ok = lows[i] + ranges[i] * 0.5, 2, True
-        elif cl_win > 0:
-            cl_ok  = cl_ok and (highs[i] <= cl_mid)
-            cl_win -= 1
-            if cl_win == 0:
-                bear_clim = True
+.spark-wrap svg { display: block; width: 72px; height: 20px; }
 
-        bear_th = False
-        bth = highs[i-1] > highs[i-2] > highs[i-3] > highs[i-4]
-        if bth:
-            th_level, th_win = lows[i-1], 3
-        if th_win > 0 and not bth:
-            bear_th = lows[i] < th_level
-            th_win -= 1
-            if bear_th or th_win == 0:
-                th_level, th_win = np.nan, 0
+/* ── Sortable columns ─────────────────────────────────── */
+thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: color 0.15s;
+}
+thead th.sortable:hover { color: var(--orange); }
+thead th.sort-asc::after  { content: ' ▲'; color: var(--orange); font-size: 9px; }
+thead th.sort-desc::after { content: ' ▼'; color: var(--orange); font-size: 9px; }
 
-        tick_gap_up = brk_gap_dn = False
-        if i >= 1:
-            tick_gap_up = opens[i] > closes[i-1] and bear and (highs[i] - opens[i]) < WICK_THRESH
-            brk_gap_dn  = opens[i] < closes[i-1] and closes[i] < lows[i-1]
+.error-box {
+  color: var(--amber);
+  background: var(--bg2);
+  border: 1px solid var(--orange-dim);
+  padding: 14px 18px;
+  font-size: 11px;
+  line-height: 1.7;
+}
 
-        events[i] = float(any([bear4, bear_oh, bear_yellow, bear_inside,
-                                bear_clim, bear_th, tick_gap_up, brk_gap_dn]))
-    return events
+.loading-row td { color: var(--text-dim); padding: 24px 10px; }
 
+/* ── Score threshold badge ────────────────────────────── */
+.threshold-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 7px;
+  background: var(--green-dim);
+  color: var(--green);
+  border-radius: 2px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
 
-# ── Micro gaps (weekly) ───────────────────────────────────────────────────────
-def detect_micro_gaps(highs, lows, closes, opens):
-    n = len(closes)
-    bull_ev = np.zeros(n, dtype=float)
-    bear_ev = np.zeros(n, dtype=float)
-    for i in range(2, n):
-        mg_bull = (lows[i] > highs[i-2] and lows[i-1] >= lows[i-2] and lows[i] >= lows[i-1])
-        mg_bear = (highs[i] < lows[i-2] and highs[i-1] <= highs[i-2] and highs[i] <= highs[i-1])
-        bull_ev[i] = float(mg_bull)
-        bear_ev[i] = float(mg_bear)
-    return bull_ev, bear_ev
+/* ── Legend ───────────────────────────────────────────── */
+.legend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 24px;
+}
+.legend-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  padding: 16px 18px;
+}
+.legend-title {
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin-bottom: 10px;
+}
+.legend-body {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.9;
+}
 
+/* ── Footer ───────────────────────────────────────────── */
+footer {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 0.06em;
+  flex-wrap: wrap;
+  gap: 8px;
 
-# ── Bull % via WMA ────────────────────────────────────────────────────────────
-def calc_bull_pct(bull_ev, bear_ev, lookback):
-    b = wma(bull_ev, lookback)
-    s = wma(bear_ev, lookback)
-    total = b + s
-    with np.errstate(divide='ignore', invalid='ignore'):
-        return np.where(total > 0, (b / total) * 100.0, 50.0)
+/* ── TradingView chart popup ──────────────────────────── */
+.tv-popup {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg2);
+  border: 1px solid var(--orange);
+  border-radius: 4px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+  overflow: hidden;
+  width: 500px;
+  height: 320px;
+  pointer-events: none;
+}
+.tv-popup.visible {
+  display: block;
+}
+.tv-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--orange);
+  text-transform: uppercase;
+}
+.tv-popup iframe {
+  width: 100%;
+  height: calc(100% - 30px);
+  border: none;
+  display: block;
+}
+.etf-name-link {
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 1px dashed var(--text-dim);
+  transition: border-color 0.15s, color 0.15s;
+}
+.etf-name-link:hover {
+  color: var(--orange);
+  border-bottom-color: var(--orange);
+}
 
+/* ── Fade in ──────────────────────────────────────────── */
+.fade-in { animation: fadeIn 0.4s ease both; }
+@keyframes fadeIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: none; } }
+</style>
+</head>
+<body>
 
-# ── Resample OHLCV ────────────────────────────────────────────────────────────
-def resample_ohlcv(df, freq):
-    rule = {'W': 'W-FRI', 'M': 'ME'}[freq]
-    return df.resample(rule).agg({
-        'Open': 'first', 'High': 'max',
-        'Low': 'min',   'Close': 'last',
-        'Volume': 'sum'
-    }).dropna(subset=['Close'])
+<!-- TradingView chart popup -->
+<div class="tv-popup" id="tv-popup">
+  <div class="tv-popup-header">
+    <span id="tv-popup-label">—</span>
+    <span style="color:var(--text-dim);font-size:10px">WEEKLY · Hover to view</span>
+  </div>
+  <iframe id="tv-popup-iframe" src="" scrolling="no"></iframe>
+</div>
 
+<div class="container">
 
-def sf(v, n=2):
-    try:
-        f = float(v)
-        return None if (np.isnan(f) or np.isinf(f)) else round(f, n)
-    except Exception:
-        return None
+<header class="fade-in">
+  <div>
+    <div class="site-label">Bull / Bear Event Model · WMA Composite</div>
+    <div class="site-title">US ETF <span>Ranking</span></div>
+    <div class="updated-row">
+      <span class="dot">◆</span>
+      <span id="updated-ts">Loading…</span>
+      <span>·</span>
+      <span>AUTO-REFRESH DAILY 22:00 UTC (9AM AEDT) VIA GITHUB ACTIONS</span>
+    </div>
+  </div>
+</header>
 
+<!-- Summary bar -->
+<div class="summary-bar fade-in" style="animation-delay:0.05s">
+  <div class="stat-box">
+    <div class="stat-label">Bullish ETFs</div>
+    <div class="stat-value pos" id="stat-bull">—</div>
+    <div class="stat-sub">Score ≥ 50%</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-label">Strong Bull (≥60%)</div>
+    <div class="stat-value" id="stat-strong" style="color:var(--green-dk)">—</div>
+    <div class="stat-sub">Alert threshold</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-label">Avg Composite Score</div>
+    <div class="stat-value" id="stat-avg">—</div>
+    <div class="stat-sub">All ETFs</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-label">Bearish ETFs</div>
+    <div class="stat-value neg" id="stat-bear">—</div>
+    <div class="stat-sub">Score &lt; 50%</div>
+  </div>
+</div>
 
-# ── Process one ticker ────────────────────────────────────────────────────────
-def process_ticker(ticker, name):
-    print(f"  {ticker} ({name})")
-    t = yf.Ticker(ticker)
-    daily = t.history(period="2y")
-    if daily.empty or len(daily) < 35:
-        print(f"    [WARN] insufficient data", file=sys.stderr)
-        return None
+<!-- Tabs -->
+<div class="tabs fade-in" style="animation-delay:0.08s">
+  <button class="tab-btn active" onclick="switchTab('Indices')">Indices</button>
+  <button class="tab-btn" onclick="switchTab('Sel Sectors')">Sel Sectors</button>
+  <button class="tab-btn" onclick="switchTab('Industries')">Industries</button>
+</div>
 
-    daily.index = pd.to_datetime(daily.index).tz_localize(None)
-    daily = daily.sort_index()
+<!-- Tab panes -->
+<div id="pane-Indices" class="tab-pane active fade-in" style="animation-delay:0.1s">
+  <div class="tbl-header">
+    <span class="tbl-title">Indices</span>
+    <span class="tbl-sub">Ranked by Composite Score · D×50% + W×30% + M×20%</span>
+    <span class="threshold-badge">ALERT ≥60%</span>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr>
+    <th class="sortable" onclick="sortTable('Indices','rank')">Rank</th><th>ETF</th>
+    <th class="r sortable" onclick="sortTable('Indices','price')">Price</th>
+    <th class="r sortable" onclick="sortTable('Indices','chg')">Chg%</th>
+    <th class="r sortable" onclick="sortTable('Indices','daily')">Daily%</th>
+    <th class="r sortable" onclick="sortTable('Indices','weekly')">Weekly%</th>
+    <th class="r sortable" onclick="sortTable('Indices','monthly')">Monthly%</th>
+    <th class="r sortable" onclick="sortTable('Indices','composite')">Score</th>
+    <th class="c">MG</th><th class="c sortable" onclick="sortTable('Indices','rank_diff')">Trend</th>
+    <th class="r sortable" onclick="sortTable('Indices','spark')">Spark</th>
+  </tr></thead><tbody id="body-Indices"><tr class="loading-row"><td colspan="11">Loading…</td></tr></tbody></table></div>
+</div>
 
-    do, dh, dl, dc = daily['Open'].values, daily['High'].values, daily['Low'].values, daily['Close'].values
+<div id="pane-Sel Sectors" class="tab-pane fade-in" style="animation-delay:0.1s">
+  <div class="tbl-header">
+    <span class="tbl-title">Sel Sectors</span>
+    <span class="tbl-sub">Ranked by Composite Score · D×50% + W×30% + M×20%</span>
+    <span class="threshold-badge">ALERT ≥60%</span>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr>
+    <th class="sortable" onclick="sortTable('Sel Sectors','rank')">Rank</th><th>ETF</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','price')">Price</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','chg')">Chg%</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','daily')">Daily%</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','weekly')">Weekly%</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','monthly')">Monthly%</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','composite')">Score</th>
+    <th class="c">MG</th><th class="c sortable" onclick="sortTable('Sel Sectors','rank_diff')">Trend</th>
+    <th class="r sortable" onclick="sortTable('Sel Sectors','spark')">Spark</th>
+  </tr></thead><tbody id="body-Sel Sectors"><tr class="loading-row"><td colspan="11">Loading…</td></tr></tbody></table></div>
+</div>
 
-    d_bull = detect_bull_events(do, dh, dl, dc)
-    d_bear = detect_bear_events(do, dh, dl, dc)
-    d_pct  = calc_bull_pct(d_bull, d_bear, D_LOOKBACK)
+<div id="pane-Industries" class="tab-pane fade-in" style="animation-delay:0.1s">
+  <div class="tbl-header">
+    <span class="tbl-title">Industries</span>
+    <span class="tbl-sub">Ranked by Composite Score · D×50% + W×30% + M×20%</span>
+    <span class="threshold-badge">ALERT ≥60%</span>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr>
+    <th class="sortable" onclick="sortTable('Industries','rank')">Rank</th><th>ETF</th>
+    <th class="r sortable" onclick="sortTable('Industries','price')">Price</th>
+    <th class="r sortable" onclick="sortTable('Industries','chg')">Chg%</th>
+    <th class="r sortable" onclick="sortTable('Industries','daily')">Daily%</th>
+    <th class="r sortable" onclick="sortTable('Industries','weekly')">Weekly%</th>
+    <th class="r sortable" onclick="sortTable('Industries','monthly')">Monthly%</th>
+    <th class="r sortable" onclick="sortTable('Industries','composite')">Score</th>
+    <th class="c">MG</th><th class="c sortable" onclick="sortTable('Industries','rank_diff')">Trend</th>
+    <th class="r sortable" onclick="sortTable('Industries','spark')">Spark</th>
+  </tr></thead><tbody id="body-Industries"><tr class="loading-row"><td colspan="11">Loading…</td></tr></tbody></table></div>
+</div>
 
-    wkly   = resample_ohlcv(daily, 'W')
-    wo, wh, wl, wc = wkly['Open'].values, wkly['High'].values, wkly['Low'].values, wkly['Close'].values
-    w_bull = detect_bull_events(wo, wh, wl, wc)
-    w_bear = detect_bear_events(wo, wh, wl, wc)
-    w_pct  = calc_bull_pct(w_bull, w_bear, W_LOOKBACK)
-    mg_bull_ev, mg_bear_ev = detect_micro_gaps(wh, wl, wc, wo)
-    mg_bull = int(np.nansum(mg_bull_ev[-MG_WEEKLY_LBK:]))
-    mg_bear = int(np.nansum(mg_bear_ev[-MG_WEEKLY_LBK:]))
+<!-- Legend -->
+<div class="legend-grid fade-in" style="animation-delay:0.15s">
+  <div class="legend-box">
+    <div class="legend-title">Column Guide</div>
+    <div class="legend-body">
+      <span style="color:var(--text)">Daily%</span> — WMA bull% on daily bars (30-bar lookback)<br>
+      <span style="color:var(--text)">Weekly%</span> — WMA bull% on weekly bars (13-bar lookback)<br>
+      <span style="color:var(--text)">Monthly%</span> — WMA bull% on monthly bars (12-bar lookback)<br>
+      <span style="color:var(--text)">Score</span> — Composite: D×50% + W×30% + M×20%<br>
+      <span style="color:var(--text)">MG</span> — Micro gap bias over last 13 weekly bars<br>
+      <span style="color:var(--text)">Trend</span> — Rank change vs 10 trading days ago
+    </div>
+  </div>
+  <div class="legend-box">
+    <div class="legend-title">Signal Colours</div>
+    <div class="legend-body">
+      <span style="color:var(--green-dk)">Dark Green</span> — Score &gt; 60% (strong bull · Telegram alert)<br>
+      <span style="color:var(--green)">Green</span> — Score ≥ 50% (bull)<br>
+      <span style="color:var(--red)">Red</span> — Score &lt; 50% (bear)<br>
+      <span style="color:var(--green-dk)">Chg Dark Green</span> — Day change &gt; +1%<br>
+      <span style="color:var(--red-dk)">Chg Dark Red</span> — Day change &lt; -1%<br>
+      <span style="color:var(--green)">MG B</span> — Micro gap bull dominant (2:1 ratio)
+    </div>
+  </div>
+</div>
 
-    mnth   = resample_ohlcv(daily, 'M')
-    mo, mh, ml, mc = mnth['Open'].values, mnth['High'].values, mnth['Low'].values, mnth['Close'].values
-    m_bull = detect_bull_events(mo, mh, ml, mc)
-    m_bear = detect_bear_events(mo, mh, ml, mc)
-    m_pct  = calc_bull_pct(m_bull, m_bear, M_LOOKBACK)
+<footer>
+  <span>Data: Yahoo Finance · Bull/bear event model matches TradingView Pine Script v6 · Composite: D×50% + W×30% + M×20%</span>
+  <span id="footer-ts">—</span>
+</footer>
 
-    d_val = sf(d_pct[-1])
-    w_val = sf(w_pct[-1])
-    m_val = sf(m_pct[-1] if len(m_pct) > 0 else np.nan)
-    comp  = (d_val or 50) * DAILY_WT + (w_val or 50) * WEEKLY_WT + (m_val or 50) * MONTHLY_WT
+</div>
 
-    if len(d_pct) > RANK_LBK:
-        hist_comp = (sf(d_pct[-(RANK_LBK+1)]) or 50) * DAILY_WT + (w_val or 50) * WEEKLY_WT + (m_val or 50) * MONTHLY_WT
-    else:
-        hist_comp = comp
+<script>
+const el = id => document.getElementById(id);
 
-    price = sf(dc[-1])
-    chg   = sf(((dc[-1] / dc[-2]) - 1) * 100) if len(dc) >= 2 and dc[-2] != 0 else None
+const GROUPS = ['Indices', 'Sel Sectors', 'Industries'];
+let activeTab = 'Indices';
 
-    spark_raw = dc[-10:].tolist()
-    lo, hi = min(spark_raw), max(spark_raw)
-    rng = hi - lo if hi != lo else 1
-    spark = [sf((v - lo) / rng * 100) for v in spark_raw]
+// Sort state per group: { col, dir }  dir = 'desc' | 'asc'
+const sortState = {};
+GROUPS.forEach(g => sortState[g] = { col: 'rank', dir: 'asc' });
 
-    return {
-        "ticker":    ticker,
-        "name":      name,
-        "price":     price,
-        "chg":       chg,
-        "daily":     d_val,
-        "weekly":    w_val,
-        "monthly":   m_val,
-        "composite": sf(comp),
-        "hist_composite": sf(hist_comp),
-        "mg_bull":   mg_bull,
-        "mg_bear":   mg_bear,
-        "spark":     spark,
+// Raw data store per group
+const groupData = {};
+
+function sortTable(group, col) {
+  const state = sortState[group];
+  if (state.col === col) {
+    state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.col = col;
+    state.dir = col === 'rank' ? 'asc' : 'desc';
+  }
+  const rows = [...(groupData[group] || [])];
+  rows.sort((a, b) => {
+    let av, bv;
+    if (col === 'spark') {
+      av = a.spark ? a.spark[a.spark.length - 1] : 0;
+      bv = b.spark ? b.spark[b.spark.length - 1] : 0;
+    } else {
+      av = a[col] ?? (col === 'rank' ? 999 : -999);
+      bv = b[col] ?? (col === 'rank' ? 999 : -999);
     }
+    return state.dir === 'asc' ? av - bv : bv - av;
+  });
+  renderGroup(group, rows, true);
+  // Update header arrow indicators
+  const pane = el('pane-' + group);
+  pane.querySelectorAll('th.sortable').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    const onclick = th.getAttribute('onclick') || '';
+    if (onclick.includes(`'${col}'`)) {
+      th.classList.add(state.dir === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
+  });
+}
 
+function switchTab(name) {
+  activeTab = name;
+  GROUPS.forEach(g => {
+    el('pane-' + g).classList.toggle('active', g === name);
+    document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+      btn.classList.toggle('active', GROUPS[i] === name);
+    });
+  });
+}
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-def main():
-    os.makedirs("data", exist_ok=True)
-    output = {"updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "groups": {}}
+function fmtPrice(v) {
+  if (v == null) return '—';
+  if (v >= 10000) return v.toFixed(0);
+  if (v >= 1000)  return v.toFixed(1);
+  return v.toFixed(2);
+}
 
-    for group_name, tickers in GROUPS.items():
-        print(f"\n── {group_name} ──")
-        results = []
-        for ticker, name in tickers.items():
-            try:
-                row = process_ticker(ticker, name)
-                if row:
-                    results.append(row)
-            except Exception as e:
-                print(f"  [ERROR] {ticker}: {e}", file=sys.stderr)
+function fmtPct(v, d=1) {
+  if (v == null) return '—';
+  return (v > 0 ? '+' : '') + v.toFixed(d) + '%';
+}
 
-        results.sort(key=lambda x: x['composite'] or 0, reverse=True)
-        for i, r in enumerate(results):
-            r['rank'] = i + 1
+function scoreClass(v) {
+  if (v == null) return 'neu';
+  if (v > 60)  return 'score-gt60';
+  if (v >= 50) return 'score-50';
+  return 'score-lt50';
+}
 
-        hist_sorted = sorted(results, key=lambda x: x['hist_composite'] or 0, reverse=True)
-        hist_map = {r['ticker']: i + 1 for i, r in enumerate(hist_sorted)}
-        for r in results:
-            r['hist_rank'] = hist_map.get(r['ticker'], r['rank'])
-            r['rank_diff'] = r['rank'] - r['hist_rank']
+function chgClass(v) {
+  if (v == null) return 'neu';
+  if (v > 1)   return 'pos';
+  if (v >= 0)  return 'pos';
+  if (v < -1)  return 'neg';
+  return 'neg';
+}
 
-        output["groups"][group_name] = results
-        print(f"  ✓ {len(results)} tickers")
+function sparkSVG(data, bullish) {
+  if (!data || data.length < 2) return '—';
+  const W = 72, H = 20, pad = 1;
+  const lo = Math.min(...data), hi = Math.max(...data);
+  const rng = hi - lo || 1;
+  const pts = data.map((v, i) => {
+    const x = pad + (i / (data.length-1)) * (W - pad*2);
+    const y = H - pad - ((v-lo)/rng) * (H - pad*2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const col = bullish ? '#00cc7a' : '#ff3344';
+  const lx = (pad + (W - pad*2)).toFixed(1);
+  const areaPts = `${pad},${H-pad} ${pts} ${lx},${H-pad}`;
+  return `<svg viewBox="0 0 ${W} ${H}">
+    <polygon points="${areaPts}" fill="${col}" opacity="0.08"/>
+    <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
 
-    with open("data/etf_ranking.json", "w") as f:
-        json.dump(output, f, indent=2)
+function rankBadgeClass(rank, total) {
+  if (rank <= 3) return 'rank-top3';
+  if (rank >= total - 2) return 'rank-bottom3';
+  return 'rank-mid';
+}
 
-    print("\n✓ data/etf_ranking.json written")
+function mgBadge(bull, bear) {
+  const total = bull + bear;
+  if (total === 0) return `<span class="mg-badge mg-neut">0/0</span>`;
+  if (bull >= 2 * bear) return `<span class="mg-badge mg-bull">B ${bull}/${total}</span>`;
+  if (bear > bull)      return `<span class="mg-badge mg-bear">B ${bull}/${total}</span>`;
+  return `<span class="mg-badge mg-neut">${bull}/${total}</span>`;
+}
 
+function trendIcon(d) {
+  if (d < 0) return `<span class="trend-up">▲${Math.abs(d)}</span>`;
+  if (d > 0) return `<span class="trend-dn">▼${d}</span>`;
+  return `<span class="trend-flat">─</span>`;
+}
 
-if __name__ == "__main__":
-    main()
+function scoreBarHTML(score) {
+  if (score == null) return '—';
+  const col = score > 60 ? '#007a48' : score >= 50 ? '#00cc7a' : '#ff3344';
+  return `<div class="score-cell">
+    <span class="${scoreClass(score)}">${score.toFixed(1)}%</span>
+    <div class="score-bar-bg"><div class="score-bar-fill" style="width:${Math.min(score,100)}%;background:${col}"></div></div>
+  </div>`;
+}
+
+function renderGroup(groupName, rows, skipStore) {
+  if (!skipStore) groupData[groupName] = rows;
+  const tbody = el('body-' + groupName);
+  if (!rows || rows.length === 0) {
+    tbody.innerHTML = `<tr class="loading-row"><td colspan="11">No data for ${groupName}</td></tr>`;
+    return;
+  }
+  const total = (groupData[groupName] || rows).length;
+  tbody.innerHTML = rows.map(r => {
+    const bullish = (r.composite || 0) >= 50;
+    return `<tr>
+      <td><span class="rank-badge ${rankBadgeClass(r.rank, total)}">${r.rank}</span></td>
+      <td>
+        <div class="etf-name"><span class="etf-name-link" onmouseenter="showChart(event,'${r.ticker}','${r.name}')" onmouseleave="hideChart()">${r.name}</span></div>
+        <div class="etf-ticker">${r.ticker}</div>
+      </td>
+      <td class="r price">${fmtPrice(r.price)}</td>
+      <td class="r ${chgClass(r.chg)}">${fmtPct(r.chg, 2)}</td>
+      <td class="r ${scoreClass(r.daily)}">${fmtPct(r.daily, 1)}</td>
+      <td class="r ${scoreClass(r.weekly)}">${fmtPct(r.weekly, 1)}</td>
+      <td class="r ${scoreClass(r.monthly)}">${fmtPct(r.monthly, 1)}</td>
+      <td class="r">${scoreBarHTML(r.composite)}</td>
+      <td class="c">${mgBadge(r.mg_bull || 0, r.mg_bear || 0)}</td>
+      <td class="c">${trendIcon(r.rank_diff || 0)}</td>
+      <td class="r spark-wrap">${sparkSVG(r.spark, bullish)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderSummary(data) {
+  let totalBull = 0, totalStrong = 0, totalBear = 0, totalAll = 0, sumScore = 0;
+  GROUPS.forEach(g => {
+    const rows = data.groups[g] || [];
+    rows.forEach(r => {
+      const s = r.composite || 50;
+      totalAll++;
+      sumScore += s;
+      if (s >= 50) totalBull++;
+      if (s > 60)  totalStrong++;
+      else totalBear++;
+    });
+  });
+  el('stat-bull').textContent   = totalBull;
+  el('stat-strong').textContent = totalStrong;
+  el('stat-bear').textContent   = totalAll - totalBull;
+  const avg = totalAll > 0 ? sumScore / totalAll : 50;
+  const avgEl = el('stat-avg');
+  avgEl.textContent = avg.toFixed(1) + '%';
+  avgEl.className = 'stat-value ' + (avg >= 50 ? 'pos' : 'neg');
+}
+
+async function load() {
+  try {
+    const res = await fetch('data/etf_ranking.json?' + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const ts = new Date(data.updated);
+    el('updated-ts').textContent = ts.toLocaleString('en-AU', {
+      timeZone: 'Australia/Melbourne',
+      day:'2-digit', month:'short', year:'numeric',
+      hour:'2-digit', minute:'2-digit', timeZoneName:'short'
+    });
+    el('footer-ts').textContent = 'Last updated: ' + ts.toISOString();
+
+    renderSummary(data);
+    GROUPS.forEach(g => renderGroup(g, data.groups[g] || []));
+
+  } catch(err) {
+    const isNotFound = err.message.includes('404') || err.message.includes('HTTP 4');
+    const msg = isNotFound
+      ? `<code>data/etf_ranking.json</code> not yet generated. Go to <b>Actions → Refresh ETF Ranking Data → Run workflow</b> to generate it.`
+      : `Error loading data: ${err.message}`;
+    GROUPS.forEach(g => {
+      el('body-' + g).innerHTML = `<tr><td colspan="11" style="padding:24px"><div class="error-box">${msg}</div></td></tr>`;
+    });
+  }
+}
+
+load();
+
+// ── TradingView popup ─────────────────────────────────
+let hideTimer = null;
+
+function showChart(event, ticker, name) {
+  clearTimeout(hideTimer);
+  const popup  = el('tv-popup');
+  const iframe = el('tv-popup-iframe');
+  const label  = el('tv-popup-label');
+
+  label.textContent = ticker + ' — ' + name;
+
+  const src = `https://s.tradingview.com/widgetembed/?frameElementId=tv-popup-iframe`
+    + `&symbol=NASDAQ%3A${ticker}`
+    + `&interval=W`
+    + `&hidesidetoolbar=1`
+    + `&hidetoptoolbar=1`
+    + `&symboledit=0`
+    + `&saveimage=0`
+    + `&toolbarbg=131a22`
+    + `&theme=dark`
+    + `&style=1`
+    + `&timezone=Australia%2FSydney`
+    + `&studies=%5B%5D`
+    + `&locale=en`;
+
+  // Only reload if ticker changed
+  if (iframe.dataset.ticker !== ticker) {
+    iframe.src = src;
+    iframe.dataset.ticker = ticker;
+  }
+
+  // Position popup near cursor, keep within viewport
+  const pw = 500, ph = 320;
+  let x = event.clientX + 16;
+  let y = event.clientY - 40;
+  if (x + pw > window.innerWidth  - 10) x = event.clientX - pw - 16;
+  if (y + ph > window.innerHeight - 10) y = window.innerHeight - ph - 10;
+  if (y < 10) y = 10;
+
+  popup.style.left = x + 'px';
+  popup.style.top  = y + 'px';
+  popup.classList.add('visible');
+}
+
+function hideChart() {
+  hideTimer = setTimeout(() => {
+    const popup = el('tv-popup');
+    popup.classList.remove('visible');
+  }, 200);
+}
+</script>
+</body>
+</html>
