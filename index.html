@@ -316,6 +316,51 @@ tbody td.c { text-align: center; }
   text-transform: uppercase;
   letter-spacing: 0.15em;
 }
+
+/* ── Breadth bar ─────────────────────────────────────── */
+.breadth-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+}
+.breadth-track {
+  flex: 1;
+  height: 7px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+}
+.breadth-seg { height: 100%; transition: width 0.4s ease; }
+.breadth-seg.b-strong  { background: var(--green-dk); }
+.breadth-seg.b-bull    { background: var(--green); }
+.breadth-seg.b-neutral { background: var(--amber); }
+.breadth-seg.b-bear    { background: var(--red); }
+.breadth-stats { display: flex; gap: 7px; white-space: nowrap; }
+.bs { color: var(--green-dk); }
+.bb { color: var(--green); }
+.bn { color: var(--amber); }
+.br { color: var(--red); }
+.breadth-pct {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 12px;
+  min-width: 36px;
+  text-align: right;
+}
+
+/* ── TF alignment dots ───────────────────────────────── */
+.tf-dots { display: flex; gap: 3px; align-items: center; justify-content: center; }
+.tf-dot  { width: 7px; height: 7px; border-radius: 50%; }
+.tf-dot.on  { background: var(--green); }
+.tf-dot.off { background: var(--red-dim); border: 1px solid var(--red-dk); }
+.tf-dot.mid { background: var(--amber); }
 </style>
 </head>
 <body>
@@ -333,20 +378,24 @@ tbody td.c { text-align: center; }
 
   <div class="summary-bar">
     <div class="stat-box">
-      <div class="stat-label">Bullish</div>
+      <div class="stat-label">Bullish Weekly</div>
       <div class="stat-value pos" id="stat-bull">—</div>
+      <div style="font-size:9px;color:var(--text-dim)">Weekly% &gt; 65%</div>
     </div>
     <div class="stat-box">
-      <div class="stat-label">Strong ≥60%</div>
+      <div class="stat-label">Strong Weekly</div>
       <div class="stat-value" id="stat-strong" style="color:var(--green-dk)">—</div>
+      <div style="font-size:9px;color:var(--text-dim)">Weekly% &gt; 75%</div>
     </div>
     <div class="stat-box">
       <div class="stat-label">Avg Score</div>
       <div class="stat-value" id="stat-avg">—</div>
+      <div style="font-size:9px;color:var(--text-dim)">Composite all ETFs</div>
     </div>
     <div class="stat-box">
-      <div class="stat-label">Bearish</div>
+      <div class="stat-label">Bearish Weekly</div>
       <div class="stat-value neg" id="stat-bear">—</div>
+      <div style="font-size:9px;color:var(--text-dim)">Weekly% ≤ 65%</div>
     </div>
   </div>
 
@@ -362,6 +411,22 @@ tbody td.c { text-align: center; }
       <span class="tbl-sub">D×50% + W×30% + M×20%</span>
       <span class="threshold-badge">ALERT ≥60%</span>
     </div>
+    <div class="breadth-bar-wrap" id="breadth-Indices">
+      <span>BREADTH</span>
+      <div class="breadth-track">
+        <div class="breadth-seg b-strong" id="bseg-Indices-strong" style="width:0%"></div>
+        <div class="breadth-seg b-bull"   id="bseg-Indices-bull"   style="width:0%"></div>
+        <div class="breadth-seg b-neutral"id="bseg-Indices-neutral"style="width:0%"></div>
+        <div class="breadth-seg b-bear"   id="bseg-Indices-bear"   style="width:0%"></div>
+      </div>
+      <div class="breadth-stats">
+        <span class="bs" id="bstat-Indices-strong">—</span>
+        <span class="bb" id="bstat-Indices-bull">—</span>
+        <span class="bn" id="bstat-Indices-neutral">—</span>
+        <span class="br" id="bstat-Indices-bear">—</span>
+      </div>
+      <div class="breadth-pct" id="bpct-Indices">—</div>
+    </div>
     <div class="tbl-wrap"><table><thead><tr>
       <th class="sortable" onclick="sortTable('Indices','rank')">Rank</th><th>ETF</th>
       <th class="r sortable" onclick="sortTable('Indices','price')">Price</th>
@@ -372,8 +437,9 @@ tbody td.c { text-align: center; }
       <th class="r sortable" onclick="sortTable('Indices','composite')">Score</th>
       <th class="c">MG</th>
       <th class="c sortable" onclick="sortTable('Indices','rank_diff')">Trend</th>
+      <th class="c">D/W/M</th>
       <th class="r sortable" onclick="sortTable('Indices','spark')">Spark</th>
-    </tr></thead><tbody id="body-Indices"><tr class="loading-row"><td colspan="11">Loading…</td></tr></tbody></table></div>
+    </tr></thead><tbody id="body-Indices"><tr class="loading-row"><td colspan="12">Loading…</td></tr></tbody></table></div>
   </div>
 
   <div id="pane-Sel Sectors" class="tab-pane">
@@ -381,6 +447,22 @@ tbody td.c { text-align: center; }
       <span class="tbl-title">Sel Sectors</span>
       <span class="tbl-sub">D×50% + W×30% + M×20%</span>
       <span class="threshold-badge">ALERT ≥60%</span>
+    </div>
+    <div class="breadth-bar-wrap" id="breadth-Sel Sectors">
+      <span>BREADTH</span>
+      <div class="breadth-track">
+        <div class="breadth-seg b-strong"  id="bseg-Sel Sectors-strong"  style="width:0%"></div>
+        <div class="breadth-seg b-bull"    id="bseg-Sel Sectors-bull"    style="width:0%"></div>
+        <div class="breadth-seg b-neutral" id="bseg-Sel Sectors-neutral" style="width:0%"></div>
+        <div class="breadth-seg b-bear"    id="bseg-Sel Sectors-bear"    style="width:0%"></div>
+      </div>
+      <div class="breadth-stats">
+        <span class="bs" id="bstat-Sel Sectors-strong">—</span>
+        <span class="bb" id="bstat-Sel Sectors-bull">—</span>
+        <span class="bn" id="bstat-Sel Sectors-neutral">—</span>
+        <span class="br" id="bstat-Sel Sectors-bear">—</span>
+      </div>
+      <div class="breadth-pct" id="bpct-Sel Sectors">—</div>
     </div>
     <div class="tbl-wrap"><table><thead><tr>
       <th class="sortable" onclick="sortTable('Sel Sectors','rank')">Rank</th><th>ETF</th>
@@ -392,8 +474,9 @@ tbody td.c { text-align: center; }
       <th class="r sortable" onclick="sortTable('Sel Sectors','composite')">Score</th>
       <th class="c">MG</th>
       <th class="c sortable" onclick="sortTable('Sel Sectors','rank_diff')">Trend</th>
+      <th class="c">D/W/M</th>
       <th class="r sortable" onclick="sortTable('Sel Sectors','spark')">Spark</th>
-    </tr></thead><tbody id="body-Sel Sectors"><tr class="loading-row"><td colspan="11">Loading…</td></tr></tbody></table></div>
+    </tr></thead><tbody id="body-Sel Sectors"><tr class="loading-row"><td colspan="12">Loading…</td></tr></tbody></table></div>
   </div>
 
   <div id="pane-Industries" class="tab-pane">
@@ -401,6 +484,22 @@ tbody td.c { text-align: center; }
       <span class="tbl-title">Industries</span>
       <span class="tbl-sub">D×50% + W×30% + M×20%</span>
       <span class="threshold-badge">ALERT ≥60%</span>
+    </div>
+    <div class="breadth-bar-wrap" id="breadth-Industries">
+      <span>BREADTH</span>
+      <div class="breadth-track">
+        <div class="breadth-seg b-strong"  id="bseg-Industries-strong"  style="width:0%"></div>
+        <div class="breadth-seg b-bull"    id="bseg-Industries-bull"    style="width:0%"></div>
+        <div class="breadth-seg b-neutral" id="bseg-Industries-neutral" style="width:0%"></div>
+        <div class="breadth-seg b-bear"    id="bseg-Industries-bear"    style="width:0%"></div>
+      </div>
+      <div class="breadth-stats">
+        <span class="bs" id="bstat-Industries-strong">—</span>
+        <span class="bb" id="bstat-Industries-bull">—</span>
+        <span class="bn" id="bstat-Industries-neutral">—</span>
+        <span class="br" id="bstat-Industries-bear">—</span>
+      </div>
+      <div class="breadth-pct" id="bpct-Industries">—</div>
     </div>
     <div class="tbl-wrap"><table><thead><tr>
       <th class="sortable" onclick="sortTable('Industries','rank')">Rank</th><th>ETF</th>
@@ -412,8 +511,9 @@ tbody td.c { text-align: center; }
       <th class="r sortable" onclick="sortTable('Industries','composite')">Score</th>
       <th class="c">MG</th>
       <th class="c sortable" onclick="sortTable('Industries','rank_diff')">Trend</th>
+      <th class="c">D/W/M</th>
       <th class="r sortable" onclick="sortTable('Industries','spark')">Spark</th>
-    </tr></thead><tbody id="body-Industries"><tr class="loading-row"><td colspan="11">Loading…</td></tr></tbody></table></div>
+    </tr></thead><tbody id="body-Industries"><tr class="loading-row"><td colspan="12">Loading…</td></tr></tbody></table></div>
   </div>
 
   <div class="legend-grid">
@@ -425,17 +525,18 @@ tbody td.c { text-align: center; }
         <span style="color:var(--text)">Monthly%</span> — WMA bull% monthly (12 bars)<br>
         <span style="color:var(--text)">Score</span> — D×50% + W×30% + M×20%<br>
         <span style="color:var(--text)">MG</span> — Micro gap bias (13 weekly bars)<br>
-        <span style="color:var(--text)">Trend</span> — Rank change vs 10 days ago
+        <span style="color:var(--text)">Trend</span> — Rank change vs 10 days ago<br>
+        <span style="color:var(--text)">D/W/M</span> — Timeframe alignment: Daily / Weekly / Monthly above 50%
       </div>
     </div>
     <div class="legend-box">
-      <div class="legend-title">Signal Colours</div>
+      <div class="legend-title">Breadth Bar</div>
       <div class="legend-body">
-        <span style="color:var(--green-dk)">Dark Green</span> — Score &gt; 60% (alert)<br>
-        <span style="color:var(--green)">Green</span> — Score ≥ 50% (bull)<br>
-        <span style="color:var(--red)">Red</span> — Score &lt; 50% (bear)<br>
-        <span style="color:var(--green-dk)">Chg DkGreen</span> — Day &gt; +1%<br>
-        <span style="color:var(--red-dk)">Chg DkRed</span> — Day &lt; -1%
+        <span style="color:var(--green-dk)">■ Strong</span> — Weekly% &gt; 75%<br>
+        <span style="color:var(--green)">■ Bull</span> — Weekly% 65–75%<br>
+        <span style="color:var(--amber)">■ Neutral</span> — Weekly% 50–65%<br>
+        <span style="color:var(--red)">■ Bear</span> — Weekly% &lt; 50%<br>
+        <span style="color:var(--text)">% shown</span> — % of group above 65% (bullish)
       </div>
     </div>
   </div>
@@ -531,12 +632,56 @@ function scoreBarHTML(score) {
   return `<div class="score-cell"><span class="${scoreClass(score)}">${score.toFixed(1)}%</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:${Math.min(score,100)}%;background:${col}"></div></div></div>`;
 }
 
+function tfDots(d, w, m) {
+  const dot = v => `<div class="tf-dot ${v > 50 ? 'on' : 'off'}" title="${v != null ? v.toFixed(1)+'%' : 'N/A'}"></div>`;
+  return `<div class="tf-dots">${dot(d)}${dot(w)}${dot(m)}</div>`;
+}
+
+// ── Breadth bar ───────────────────────────────────────
+function renderBreadth(groupName, rows) {
+  const total = rows.length;
+  if (!total) return;
+  let strong=0, bull=0, neutral=0, bear=0;
+  rows.forEach(r => {
+    const w = r.weekly ?? 0;
+    if      (w > 75) strong++;
+    else if (w > 65) bull++;
+    else if (w > 50) neutral++;
+    else             bear++;
+  });
+  const pct = v => (v / total * 100).toFixed(1) + '%';
+  const bullishPct = ((strong + bull) / total * 100).toFixed(0) + '%';
+
+  // safe IDs for elements with spaces
+  const sid = s => `bseg-${groupName}-${s}`;
+  const statid = s => `bstat-${groupName}-${s}`;
+
+  const seg = (id, v) => { const el2 = document.getElementById(id); if(el2) el2.style.width = pct(v); };
+  seg(sid('strong'),  strong);
+  seg(sid('bull'),    bull);
+  seg(sid('neutral'), neutral);
+  seg(sid('bear'),    bear);
+
+  const stat = (id, v, label) => { const el2 = document.getElementById(id); if(el2) el2.textContent = `${label}:${v}`; };
+  stat(statid('strong'),  strong,  '>75%');
+  stat(statid('bull'),    bull,    '65-75%');
+  stat(statid('neutral'), neutral, '50-65%');
+  stat(statid('bear'),    bear,    '<50%');
+
+  const pctEl = document.getElementById(`bpct-${groupName}`);
+  if (pctEl) {
+    pctEl.textContent = bullishPct;
+    pctEl.style.color = (strong + bull) / total > 0.65 ? 'var(--green)' : (strong + bull) / total > 0.35 ? 'var(--amber)' : 'var(--red)';
+  }
+}
+
 // ── Render group ─────────────────────────────────────
 function renderGroup(groupName, rows, skipStore) {
   if (!skipStore) groupData[groupName] = rows;
   const tbody = el('body-' + groupName);
-  if (!rows||rows.length===0) { tbody.innerHTML=`<tr class="loading-row"><td colspan="11">No data</td></tr>`; return; }
+  if (!rows||rows.length===0) { tbody.innerHTML=`<tr class="loading-row"><td colspan="12">No data</td></tr>`; return; }
   const total = (groupData[groupName]||rows).length;
+  renderBreadth(groupName, groupData[groupName] || rows);
   tbody.innerHTML = rows.map(r => {
     const bullish = (r.composite||0) >= 50;
     return `<tr>
@@ -554,6 +699,7 @@ function renderGroup(groupName, rows, skipStore) {
       <td class="r">${scoreBarHTML(r.composite)}</td>
       <td class="c">${mgBadge(r.mg_bull||0,r.mg_bear||0)}</td>
       <td class="c">${trendIcon(r.rank_diff||0)}</td>
+      <td class="c">${tfDots(r.daily, r.weekly, r.monthly)}</td>
       <td class="r spark-wrap">${sparkSVG(r.spark,bullish)}</td>
     </tr>`;
   }).join('');
@@ -563,8 +709,11 @@ function renderGroup(groupName, rows, skipStore) {
 function renderSummary(data) {
   let bull=0,strong=0,all=0,sum=0;
   GROUPS.forEach(g => (data.groups[g]||[]).forEach(r => {
-    const s=r.composite||50; all++; sum+=s;
-    if(s>=50) bull++; if(s>60) strong++;
+    const w = r.weekly ?? 0;
+    const s = r.composite ?? 50;
+    all++; sum += s;
+    if (w > 65) bull++;
+    if (w > 75) strong++;
   }));
   el('stat-bull').textContent   = bull;
   el('stat-strong').textContent = strong;
