@@ -328,6 +328,54 @@ footer {
   letter-spacing: 0.06em;
   flex-wrap: wrap;
   gap: 8px;
+
+/* ── TradingView chart popup ──────────────────────────── */
+.tv-popup {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg2);
+  border: 1px solid var(--orange);
+  border-radius: 4px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+  overflow: hidden;
+  width: 500px;
+  height: 320px;
+  pointer-events: none;
+}
+.tv-popup.visible {
+  display: block;
+}
+.tv-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--orange);
+  text-transform: uppercase;
+}
+.tv-popup iframe {
+  width: 100%;
+  height: calc(100% - 30px);
+  border: none;
+  display: block;
+}
+.etf-name-link {
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 1px dashed var(--text-dim);
+  transition: border-color 0.15s, color 0.15s;
+}
+.etf-name-link:hover {
+  color: var(--orange);
+  border-bottom-color: var(--orange);
 }
 
 /* ── Fade in ──────────────────────────────────────────── */
@@ -336,6 +384,16 @@ footer {
 </style>
 </head>
 <body>
+
+<!-- TradingView chart popup -->
+<div class="tv-popup" id="tv-popup">
+  <div class="tv-popup-header">
+    <span id="tv-popup-label">—</span>
+    <span style="color:var(--text-dim);font-size:10px">WEEKLY · Hover to view</span>
+  </div>
+  <iframe id="tv-popup-iframe" src="" scrolling="no"></iframe>
+</div>
+
 <div class="container">
 
 <header class="fade-in">
@@ -616,7 +674,7 @@ function renderGroup(groupName, rows, skipStore) {
     return `<tr>
       <td><span class="rank-badge ${rankBadgeClass(r.rank, total)}">${r.rank}</span></td>
       <td>
-        <div class="etf-name">${r.name}</div>
+        <div class="etf-name"><span class="etf-name-link" onmouseenter="showChart(event,'${r.ticker}','${r.name}')" onmouseleave="hideChart()">${r.name}</span></div>
         <div class="etf-ticker">${r.ticker}</div>
       </td>
       <td class="r price">${fmtPrice(r.price)}</td>
@@ -683,6 +741,70 @@ async function load() {
 }
 
 load();
+
+// ── TradingView popup ─────────────────────────────────
+let hideTimer = null;
+
+// Most ETFs trade on NYSE ARCA
+const TV_EXCHANGE = {
+  'QQQ':'NASDAQ', 'QQQE':'NASDAQ', 'TQQQ':'NASDAQ',
+  'SOXX':'NASDAQ', 'SMH':'NASDAQ', 'IGV':'NASDAQ',
+  'WCLD':'NASDAQ', 'CIBR':'NASDAQ', 'AIQ':'NASDAQ',
+  'BOTZ':'NASDAQ', 'ROBO':'NASDAQ', 'BLOK':'NASDAQ',
+  'FFTY':'NASDAQ', 'ARKK':'NASDAQ', 'ARKF':'NASDAQ',
+  'ARKX':'NASDAQ', 'ARKG':'NASDAQ',
+};
+
+function getTVSymbol(ticker) {
+  const exch = TV_EXCHANGE[ticker] || 'AMEX';
+  return exch + ':' + ticker;
+}
+
+function showChart(event, ticker, name) {
+  clearTimeout(hideTimer);
+  const popup  = el('tv-popup');
+  const iframe = el('tv-popup-iframe');
+  const label  = el('tv-popup-label');
+
+  label.textContent = ticker + ' — ' + name;
+
+  const symbol = getTVSymbol(ticker);
+  const src = 'https://www.tradingview.com/widgetembed/'
+    + '?frameElementId=tv-popup-iframe'
+    + '&symbol=' + encodeURIComponent(symbol)
+    + '&interval=W'
+    + '&theme=dark'
+    + '&style=1'
+    + '&locale=en'
+    + '&toolbar_bg=%23131a22'
+    + '&hide_side_toolbar=1'
+    + '&allow_symbol_change=0'
+    + '&save_image=0'
+    + '&withdateranges=0'
+    + '&hideideas=1';
+
+  if (iframe.dataset.ticker !== ticker) {
+    iframe.src = src;
+    iframe.dataset.ticker = ticker;
+  }
+
+  const pw = 500, ph = 320;
+  let x = event.clientX + 16;
+  let y = event.clientY - 40;
+  if (x + pw > window.innerWidth  - 10) x = event.clientX - pw - 16;
+  if (y + ph > window.innerHeight - 10) y = window.innerHeight - ph - 10;
+  if (y < 10) y = 10;
+
+  popup.style.left = x + 'px';
+  popup.style.top  = y + 'px';
+  popup.classList.add('visible');
+}
+
+function hideChart() {
+  hideTimer = setTimeout(() => {
+    el('tv-popup').classList.remove('visible');
+  }, 200);
+}
 </script>
 </body>
 </html>
