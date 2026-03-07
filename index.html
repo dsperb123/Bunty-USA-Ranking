@@ -339,8 +339,8 @@ footer {
   border-radius: 4px;
   box-shadow: 0 8px 40px rgba(0,0,0,0.7);
   overflow: hidden;
-  width: 500px;
-  height: 320px;
+  width: 520px;
+  height: 360px;
   pointer-events: none;
 }
 .tv-popup.visible {
@@ -385,13 +385,16 @@ footer {
 </head>
 <body>
 
+<!-- TradingView tv.js -->
+<script src="https://s3.tradingview.com/tv.js"></script>
+
 <!-- TradingView chart popup -->
 <div class="tv-popup" id="tv-popup">
   <div class="tv-popup-header">
     <span id="tv-popup-label">—</span>
-    <span style="color:var(--text-dim);font-size:10px">WEEKLY · Hover to view</span>
+    <span style="color:var(--text-dim);font-size:10px">WEEKLY CHART</span>
   </div>
-  <iframe id="tv-popup-iframe" src="" scrolling="no"></iframe>
+  <div id="tv-popup-chart" style="width:100%;height:calc(100% - 30px);"></div>
 </div>
 
 <div class="container">
@@ -743,67 +746,64 @@ async function load() {
 load();
 
 // ── TradingView popup ─────────────────────────────────
-let hideTimer = null;
-
-// Most ETFs trade on NYSE ARCA
-const TV_EXCHANGE = {
-  'QQQ':'NASDAQ', 'QQQE':'NASDAQ', 'TQQQ':'NASDAQ',
-  'SOXX':'NASDAQ', 'SMH':'NASDAQ', 'IGV':'NASDAQ',
-  'WCLD':'NASDAQ', 'CIBR':'NASDAQ', 'AIQ':'NASDAQ',
-  'BOTZ':'NASDAQ', 'ROBO':'NASDAQ', 'BLOK':'NASDAQ',
-  'FFTY':'NASDAQ', 'ARKK':'NASDAQ', 'ARKF':'NASDAQ',
-  'ARKX':'NASDAQ', 'ARKG':'NASDAQ',
-};
-
-function getTVSymbol(ticker) {
-  const exch = TV_EXCHANGE[ticker] || 'AMEX';
-  return exch + ':' + ticker;
-}
+let tvWidget   = null;
+let tvCurrent  = null;
+let hideTimer  = null;
 
 function showChart(event, ticker, name) {
   clearTimeout(hideTimer);
-  const popup  = el('tv-popup');
-  const iframe = el('tv-popup-iframe');
-  const label  = el('tv-popup-label');
 
-  label.textContent = ticker + ' — ' + name;
+  const popup = el('tv-popup');
+  el('tv-popup-label').textContent = ticker + ' — ' + name;
 
-  const symbol = getTVSymbol(ticker);
-  const src = 'https://www.tradingview.com/widgetembed/'
-    + '?frameElementId=tv-popup-iframe'
-    + '&symbol=' + encodeURIComponent(symbol)
-    + '&interval=W'
-    + '&theme=dark'
-    + '&style=1'
-    + '&locale=en'
-    + '&toolbar_bg=%23131a22'
-    + '&hide_side_toolbar=1'
-    + '&allow_symbol_change=0'
-    + '&save_image=0'
-    + '&withdateranges=0'
-    + '&hideideas=1';
-
-  if (iframe.dataset.ticker !== ticker) {
-    iframe.src = src;
-    iframe.dataset.ticker = ticker;
-  }
-
-  const pw = 500, ph = 320;
-  let x = event.clientX + 16;
-  let y = event.clientY - 40;
-  if (x + pw > window.innerWidth  - 10) x = event.clientX - pw - 16;
+  // Position popup near cursor, keep within viewport
+  const pw = 520, ph = 360;
+  let x = event.clientX + 18;
+  let y = event.clientY - 50;
+  if (x + pw > window.innerWidth  - 10) x = event.clientX - pw - 18;
   if (y + ph > window.innerHeight - 10) y = window.innerHeight - ph - 10;
   if (y < 10) y = 10;
-
   popup.style.left = x + 'px';
   popup.style.top  = y + 'px';
   popup.classList.add('visible');
+
+  // Only rebuild widget if ticker changed
+  if (tvCurrent === ticker) return;
+  tvCurrent = ticker;
+
+  // Destroy old widget
+  if (tvWidget) { try { tvWidget.remove(); } catch(e) {} tvWidget = null; }
+  el('tv-popup-chart').innerHTML = '';
+
+  tvWidget = new TradingView.widget({
+    container_id:       'tv-popup-chart',
+    symbol:             ticker,
+    interval:           'W',
+    theme:              'dark',
+    style:              '1',
+    locale:             'en',
+    toolbar_bg:         '#0d1218',
+    backgroundColor:    '#070a0d',
+    gridColor:          'rgba(28,40,48,0.8)',
+    timezone:           'Australia/Sydney',
+    hide_side_toolbar:  true,
+    hide_top_toolbar:   false,
+    hide_legend:        false,
+    hide_volume:        true,
+    allow_symbol_change:false,
+    save_image:         false,
+    withdateranges:     false,
+    hotlist:            false,
+    calendar:           false,
+    autosize:           true,
+    studies:            ['STD;MA%Ribbon'],
+  });
 }
 
 function hideChart() {
   hideTimer = setTimeout(() => {
     el('tv-popup').classList.remove('visible');
-  }, 200);
+  }, 300);
 }
 </script>
 </body>
