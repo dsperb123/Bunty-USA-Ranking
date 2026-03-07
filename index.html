@@ -135,6 +135,7 @@ body::before {
 .pos { color: var(--green); }
 .neg { color: var(--red); }
 .neu { color: var(--text-dim); }
+.neu-amber { color: var(--amber); }
 
 /* ── Tabs ────────────────────────────────────────────── */
 .tabs {
@@ -720,7 +721,7 @@ function renderSummary(data) {
   el('stat-bear').textContent   = all - bull;
   const avg = all>0?sum/all:50;
   el('stat-avg').textContent = avg.toFixed(1)+'%';
-  el('stat-avg').className = 'stat-value '+(avg>=50?'pos':'neg');
+  el('stat-avg').className = 'stat-value ' + (avg > 65 ? 'pos' : avg >= 50 ? 'neu-amber' : 'neg');
 }
 
 // ── Load JSON ────────────────────────────────────────
